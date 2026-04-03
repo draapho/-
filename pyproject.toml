@@ -15,6 +15,7 @@ packages = [
 
 [tool.poetry.scripts]
 najia = 'najia.__main__:main'
+najia-gui = 'najia.gui:main'
 
 
 [tool.poetry.dependencies]
