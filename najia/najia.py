@@ -118,14 +118,7 @@ def _align_hexagram_table(rows: dict) -> None:
     w = max(_column_width(rows["bian"]["mark"]), mark_floor)
     rows["bian"]["mark"] = _pad_column(rows["bian"]["mark"], w)
 
-    w = max(_column_width(rows["hu"]["mark"]), mark_floor)
-    rows["hu"]["mark"] = _pad_column(rows["hu"]["mark"], w)
-
-    w = max(_column_width(rows["cuo"]["mark"]), mark_floor)
-    rows["cuo"]["mark"] = _pad_column(rows["cuo"]["mark"], w)
-
-    w = max(_column_width(rows["zong"]["mark"]), mark_floor)
-    rows["zong"]["mark"] = _pad_column(rows["zong"]["mark"], w)
+    # 互/错/综爻宽在 _prepare_aux_layout 中按「本卦—变卦」横向宽度再分配
 
 
 def _derive_hu_cuo_zong(mark: str) -> tuple[str, str, str]:
@@ -146,58 +139,120 @@ def _aux_gong_name_type(mark: str) -> dict:
     return {"name": GUA64[mark], "gong": GUAS[gi], "type": typ}
 
 
-# 与 standard.tpl 中变卦爻画与互/错/综爻画之间的全角间距一致
-_MARK_COL_GAP = "　　　"
-
-
-def _prefix_before_hu_mark_row(rows: dict, i: int) -> str:
-    """与模板中到互卦首根爻画前的字符串一致（含变卦后与互卦之间的空距）。"""
-    return (
-        rows["god6"][i]
-        + rows["hide"]["qin6"][i]
-        + rows["qin6"][i]
-        + rows["qinx"][i]
-        + " "
-        + rows["main"]["mark"][i]
-        + " "
+def _prepare_main_bian_titles_line(rows: dict) -> None:
+    """本卦、变卦卦名与各自爻画列左缘对齐（按显示宽度，与六神爻行一致）。"""
+    i = 0
+    prefix = "".join(
+        [
+            rows["god6"][i],
+            rows["hide"]["qin6"][i],
+            rows["qin6"][i],
+            rows["qinx"][i],
+        ]
+    )
+    s_main = _cell_display_width(prefix) + 1
+    W_main = _cell_display_width(rows["main"]["mark"][i])
+    gap_b = (
+        " "
         + rows["shiy"][i]
         + rows["dyao"][i]
         + " "
         + rows["bian"]["qin6"][i]
         + " "
-        + rows["bian"]["mark"][i]
-        + _MARK_COL_GAP
     )
+    s_bian = s_main + W_main + _cell_display_width(gap_b)
+
+    main_type = rows["main"].get("type") or ""
+    mt = f"{rows['main']['gong']}宫:{rows['main']['name']}"
+    if main_type:
+        mt += f"({main_type})"
+
+    bt = ""
+    raw_bian = rows.get("bian")
+    if raw_bian and raw_bian.get("name"):
+        bt = f"{raw_bian['gong']}宫:{raw_bian['name']}"
+        btyp = raw_bian.get("type") or ""
+        if btyp:
+            bt += f" ({btyp})"
+
+    parts: list[str] = []
+    pos = 0
+    if pos < s_main:
+        parts.append(_pad_cell("", s_main - pos))
+        pos = s_main
+    parts.append(mt)
+    pos += _cell_display_width(mt)
+    if bt:
+        if pos < s_bian:
+            parts.append(_pad_cell("", s_bian - pos))
+            pos = s_bian
+        parts.append(bt)
+    rows["main_bian_titles_line"] = "".join(parts)
 
 
 def _prepare_aux_layout(rows: dict) -> None:
-    """互/错/综标题与下方三列爻画：列宽与行间空白一致，避免标题远在爻画右侧。"""
-    pw = _cell_display_width(_prefix_before_hu_mark_row(rows, 5))
+    """互贴行首；错在互与综之间居中；综与主表变卦爻同列同宽；右缘不超过变卦。"""
+    i = 0
+    prefix = "".join(
+        [
+            rows["god6"][i],
+            rows["hide"]["qin6"][i],
+            rows["qin6"][i],
+            rows["qinx"][i],
+        ]
+    )
+    w_prefix = _cell_display_width(prefix)
+
+    W_main = _cell_display_width(rows["main"]["mark"][i])
+    W_bian = _cell_display_width(rows["bian"]["mark"][i])
+    gap_mid = (
+        " "
+        + rows["shiy"][i]
+        + rows["dyao"][i]
+        + " "
+        + rows["bian"]["qin6"][i]
+        + " "
+    )
+    gap_mid_w = _cell_display_width(gap_mid)
+    # 与主表「变卦爻」左缘对齐的显示宽度（行首为 0，与六神列对齐）
+    zong_col_start = w_prefix + 1 + W_main + gap_mid_w
+
+    mark_floor = _mark_column_min_width()
+    M_inner = zong_col_start
+    g_min = 1
+    W_pair = max(mark_floor, (M_inner - 2 * g_min) // 2)
+    if 2 * W_pair > M_inner:
+        W_pair = max(1, M_inner // 2)
+    leftover = M_inner - 2 * W_pair
+    if leftover < 0:
+        W_pair = max(1, M_inner // 2)
+        leftover = M_inner - 2 * W_pair
+    g1 = (leftover + 1) // 2
+    g2 = leftover // 2
+
+    rows["gap_hu_cuo"] = _pad_cell("", g1)
+    rows["gap_cuo_zong"] = _pad_cell("", g2)
+
+    for j in range(6):
+        rows["hu"]["mark"][j] = _pad_cell(rows["hu"]["mark"][j], W_pair)
+        rows["cuo"]["mark"][j] = _pad_cell(rows["cuo"]["mark"][j], W_pair)
+        rows["zong"]["mark"][j] = _pad_cell(rows["zong"]["mark"][j], W_bian)
 
     def one(label: str, h: dict) -> str:
         t = f"({h['type']})" if h.get("type") else ""
         return f"{label}{h['gong']}宫:{h['name']}{t}"
 
-    w_mu = _cell_display_width(rows["hu"]["mark"][5])
-    w_cuo = _cell_display_width(rows["cuo"]["mark"][5])
-    g = _cell_display_width(_MARK_COL_GAP)
-
-    t_hu = one("互卦", rows["hu"])
-    t_cuo = one("错卦", rows["cuo"])
-    t_zong = one("综卦", rows["zong"])
-    wt_hu = _cell_display_width(t_hu)
-    wt_cuo = _cell_display_width(t_cuo)
-
-    # 卦名常比爻画列更宽：动态加宽互–错、错–综空白，与标题行用同一 g1/g2
-    g1 = g + max(0, wt_hu - w_mu)
-    g2 = g + max(0, wt_cuo - w_cuo)
-    rows["gap_hu_cuo"] = _pad_cell("", g1)
-    rows["gap_cuo_zong"] = _pad_cell("", g2)
-
-    lead = _pad_cell("", pw)
-    pad1 = _pad_cell("", w_mu + g1 - wt_hu)
-    pad2 = _pad_cell("", w_cuo + g2 - wt_cuo)
-    rows["aux_titles_line"] = lead + t_hu + pad1 + t_cuo + pad2 + t_zong
+    titles = [one("互卦", rows["hu"]), one("错卦", rows["cuo"]), one("综卦", rows["zong"])]
+    s0, s1, s2 = 0, W_pair + g1, zong_col_start
+    parts: list[str] = []
+    pos = 0
+    for t, s in zip(titles, [s0, s1, s2]):
+        if pos < s:
+            parts.append(_pad_cell("", s - pos))
+            pos = s
+        parts.append(t)
+        pos += _cell_display_width(t)
+    rows["aux_titles_line"] = "".join(parts)
 
 
 class Najia(object):
@@ -457,7 +512,6 @@ class Najia(object):
 
         rows["main"]["gong"] = rows["gong"]
         rows["main"]["name"] = rows["name"]
-        rows["main"]["indent"] = "\u3000" * 2
 
         if rows.get("hide"):
             rows["hide"]["qin6"] = [
@@ -468,14 +522,8 @@ class Najia(object):
                 )
                 for x in range(0, 6)
             ]
-            rows["main"]["indent"] += empty
         else:
-            rows["main"]["indent"] += "\u3000" * 1
             rows["hide"] = {"qin6": [empty for _ in range(0, 6)]}
-
-        rows["main"]["display"] = "{indent}{name} ({gong}-{type})".format(
-            **rows["main"]
-        )
 
         mark_bin = self.data["mark"]
         hu_m, cuo_m, zong_m = _derive_hu_cuo_zong(mark_bin)
@@ -493,9 +541,7 @@ class Najia(object):
         }
 
         if rows.get("bian"):
-            hide = (12, 23)[bool(rows.get("hide"))]
             rows["bian"]["type"] = get_type(rows["bian"]["mark"])
-            rows["bian"]["indent"] = (hide - len(rows["main"]["display"])) * "\u3000"
 
             if rows["bian"]["qin6"]:
                 # 变卦六亲问题
@@ -534,6 +580,7 @@ class Najia(object):
 
         _align_hexagram_table(rows)
 
+        _prepare_main_bian_titles_line(rows)
         _prepare_aux_layout(rows)
 
         # 注意：rows 即 self.data，勿把「是否显示卦辞」布尔量 guaci 改成字符串，否则 GUI 的 guaci_dual_payload 会失灵。
