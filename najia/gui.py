@@ -16,15 +16,25 @@ from .meihua import meihua_from_ymdhms
 YAO_LABELS = ["初爻", "二爻", "三爻", "四爻", "五爻", "上爻"]
 
 YAO_OPTIONS = [
-    "0 少阴(静)",
+    "2 少阴(静)",
     "1 少阳(静)",
-    "2 老阴(动)",
-    "3 老阳(动)",
+    "x 老阴(动)",
+    "o 老阳(动)",
 ]
 
 
 def _yao_from_combo(value: str) -> int:
-    return int(str(value).strip().split()[0])
+    char = str(value).strip().split()[0].lower()
+
+    # 定义对应映射规则：2->0(少阴), 1->1(少阳), x->2(老阴/动), o->3(老阳/动)
+    mapping = {
+        "2": 0,
+        "1": 1,
+        "x": 2,
+        "o": 3,
+    }
+
+    return mapping.get(char, 0)
 
 
 class NajiaApp(tk.Tk):
@@ -58,15 +68,15 @@ class NajiaApp(tk.Tk):
         ttk.Entry(row0, textvariable=self.date_var, width=22).pack(
             side=tk.LEFT, padx=6
         )
-        ttk.Label(row0, text="格式 YYYY-MM-DD HH:mm").pack(side=tk.LEFT)
+        ttk.Label(row0, text="格式 YYYYMMDDHHmm 或 YYYYMMDD.HHmm").pack(side=tk.LEFT)
 
         row_mode = ttk.Frame(frm)
         row_mode.pack(fill=tk.X, pady=2)
         ttk.Label(row_mode, text="起卦方式").pack(side=tk.LEFT)
-        self.mode_var = tk.StringVar(value="meihua")
+        self.mode_var = tk.StringVar(value="manual")
         ttk.Radiobutton(
             row_mode,
-            text="梅花易·时间起卦（年支+农历月日+时支；与手写算法一致）",
+            text="梅花易·时间起卦(年支+农历月日+时支)",
             variable=self.mode_var,
             value="meihua",
             command=self._sync_mode_widgets,
@@ -81,25 +91,25 @@ class NajiaApp(tk.Tk):
 
         row2 = ttk.LabelFrame(
             frm,
-            text="六爻（左：上卦 · 右：下卦；自上而下与卦象自下而上初→上一致）",
+            text="六爻(左:上卦 · 右:下卦)",
             padding=(12, 10),
         )
         row2.pack(fill=tk.X, pady=6)
-        self._yao_hint = ttk.Label(
-            row2,
-            text=(
-                "时间起卦时动爻与变卦由算法自动生成；手动模式请在下方选择 0–3。"
-                "排盘含本卦、动爻标记、变卦列（静卦时变卦列为占位）。"
-                "结果区仅右侧一条竖滚动条。"
-            ),
-            justify=tk.LEFT,
-        )
-        self._yao_hint.pack(anchor=tk.W, fill=tk.X, pady=(0, 8))
-        frm.bind(
-            "<Configure>",
-            lambda e: self._yao_hint.configure(wraplength=max(320, e.width - 48)),
-            add="+",
-        )
+        # self._yao_hint = ttk.Label(
+        #     row2,
+        #     text=(
+        #         "时间起卦时动爻与变卦由算法自动生成；手动模式请在下方选择 0–3。"
+        #         "排盘含本卦、动爻标记、变卦列（静卦时变卦列为占位）。"
+        #         "结果区仅右侧一条竖滚动条。"
+        #     ),
+        #     justify=tk.LEFT,
+        # )
+        # self._yao_hint.pack(anchor=tk.W, fill=tk.X, pady=(0, 8))
+        # frm.bind(
+        #     "<Configure>",
+        #     lambda e: self._yao_hint.configure(wraplength=max(320, e.width - 48)),
+        #     add="+",
+        # )
 
         self.yao_boxes: list[ttk.Combobox | None] = [None] * 6
         inner = ttk.Frame(row2)
@@ -383,12 +393,18 @@ class NajiaApp(tk.Tk):
 
     def _run(self) -> None:
         date_s = self.date_var.get().strip()
-        try:
-            dt = arrow.get(date_s)
+        try:   
+            if len(date_s) == 12 and date_s.isdigit():
+                dt = arrow.get(date_s, "YYYYMMDDHHmm")
+            elif len(date_s) == 13 and date_s.replace(".", "").isdigit():
+                dt = arrow.get(date_s, "YYYYMMDD.HHmm")
+            else:
+                dt = arrow.get(date_s)
+            date_s = dt.format("YYYY-MM-DD HH:mm")
         except Exception:
             messagebox.showerror(
-                "日期无效",
-                "请使用形如 2025-12-06 00:00 的公历时间。",
+                "日期无效. 请使用如下格式: ",
+                "202512060000, 20251206.0000",
             )
             return
 
