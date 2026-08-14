@@ -68,7 +68,6 @@ def meihua_from_ymdhms(
 ) -> tuple[list[int], dict[str, Any]]:
     """
     公历换算农历后按上式起卦，返回 (Najia.compile 用的 params, 说明用 meta)。
-
     meta 含：年干支、农历月日、时干支、各序和、上/下卦先天序与卦名、变爻位数、本卦六比特。
     """
     solar = Solar.fromYmdHms(year, month, day, hour, minute, second)

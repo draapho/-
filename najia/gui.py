@@ -160,9 +160,17 @@ class NajiaApp(tk.Tk):
         )
         ttk.Label(row3, text="性别").pack(side=tk.LEFT)
         self.gender_var = tk.StringVar(value="")
-        ttk.Entry(row3, textvariable=self.gender_var, width=8).pack(
-            side=tk.LEFT, padx=6
+        gender_cb = ttk.Combobox(
+            row3,
+            textvariable=self.gender_var,
+            values=["", "男", "女"],
+            width=6,
+            state="readonly",
         )
+        gender_cb.pack(side=tk.LEFT, padx=6)
+        # ttk.Entry(row3, textvariable=self.gender_var, width=8).pack(
+        #     side=tk.LEFT, padx=6
+        # )
         self.guaci_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(row3, text="显示卦辞", variable=self.guaci_var).pack(
             side=tk.LEFT, padx=8
@@ -428,18 +436,18 @@ class NajiaApp(tk.Tk):
         gender = self.gender_var.get().strip()
         guaci = bool(self.guaci_var.get())
 
-        try:
-            n = Najia().compile(
-                params=params,
-                gender=gender or None,
-                date=date_s,
-                title=title or None,
-                guaci=guaci,
-            )
-            text = n.render(embed_guaci_plain=not guaci)
-        except Exception as ex:
-            messagebox.showerror("排盘失败", str(ex))
-            return
+        # try: # BUG
+        n = Najia().compile(
+            params=params,
+            gender=gender or None,
+            date=date_s,
+            title=title or None,
+            guaci=guaci,
+        )
+        text = n.render(embed_guaci_plain=not guaci)
+        # except Exception as ex:
+        #     messagebox.showerror("排盘失败", str(ex))
+        #     return
 
         self.hex_text.delete("1.0", tk.END)
         self.hex_text.insert(tk.END, text.rstrip() + "\n")

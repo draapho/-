@@ -150,24 +150,14 @@ def get_type(symbol=None):
     if res := soul(symbol):
         return res
 
-    if attack(symbol):
+    name = const.GUA64[symbol]
+    if any(x in name for x in const.CHONG):
         return '六冲'
 
-    if res := unite(symbol):
-        return res
+    if any(x in name for x in const.LIUHE):
+        return "六合"
 
     return ''
-
-
-def unite(symbol=None):
-    name = const.GUA64[symbol]
-
-    for x in const.LIUHE:
-        if x in name:
-            return '六合'
-
-    return None
-
 
 def soul(symbol=None):
     wai = symbol[3:]  # 外卦
@@ -221,29 +211,6 @@ def palace(symbol=None, index=None):  # inStr -> '111000'  # intNum -> 世爻
         symbol = ''.join([str(int(c) ^ 1) for c in nei])
         return const.YAOS.index(symbol)
 
-
-# 判断是否六冲卦
-# verb
-def attack(symbol):
-    wai = symbol[3:]  # 外卦
-    nei = symbol[:3]  # 内卦
-
-    # 内外卦相同
-    if wai == nei:
-        return True
-
-    # 天雷无妄 和 雷天大壮
-    gua = [nei, wai]
-
-    try:
-        if len(set(gua).difference(('100', '111'))) == 0:
-            return True
-    except TypeError:
-        pass
-
-    return False
-
-
 # 纳甲配干支
 def get_najia(symbol=None):
     """
@@ -287,6 +254,44 @@ def get_qin6(w1, w2):
     logger.debug(q6)
 
     return q6
+
+
+def get_zhi5(text: str) -> str:
+    """传入干支(如 '甲子')或纯地支(如 '子'), 返回对应地支五行(如 '水')."""
+    if not text:
+        return ""
+
+    zhi = text[-1]
+    if zhi in const.ZHIS:
+        return const.XING5[const.ZHI5[const.ZHIS.index(zhi)]]
+    return ""
+
+
+def get_xing5_relationship(a: str, b: str, rtn="b") -> str:
+    """
+    五行关系判断 (纯中文接口)
+    Args:
+        a: 主体五行, 限 "木火土金水"
+        b: 客体五行, 限 "木火土金水"
+    Returns:
+        中文关系字符串: "比和"/"生"/"克"/"被生"/"被克"
+    Raises:
+        ValueError: 输入非合法五行字符时抛出
+    """
+    _XING5_STANDARD = ("木", "火", "土", "金", "水")
+    _INDEX_MAP = {name: idx for idx, name in enumerate(_XING5_STANDARD)}
+    _RELATION_MAP_A_SHENKE = {0: "比", 1: "生", 2: "克", 3: "耗", 4: "泄"}      # 对应于{A同B, A生B, A克B, A耗B(B克A), A泄B(B生A)}
+    _RELATION_MAP_B_WANGSHUAI = {0: "旺", 1: "相", 2: "死", 3: "囚", 4: "休"}   # 对应于{A同B, A生B, A克B, A耗B(B克A), A泄B(B生A)}
+
+    if a not in _INDEX_MAP or b not in _INDEX_MAP:
+        return ""
+
+    diff = (_INDEX_MAP[b] - _INDEX_MAP[a]) % 5
+
+    if 'a' == rtn.lower().strip():
+        return _RELATION_MAP_A_SHENKE[diff]
+    else:
+        return _RELATION_MAP_B_WANGSHUAI[diff]
 
 
 def get_guaci(name=None):

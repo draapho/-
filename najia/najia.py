@@ -12,6 +12,7 @@ from jinja2 import Template
 from .const import GANS
 from .const import GUA5
 from .const import GUA64
+from .const import NUMCIR
 from .const import GUAS
 from .const import SYMBOL
 from .const import XING5
@@ -21,7 +22,9 @@ from .const import ZHIS
 from .utils import get_god6
 from .utils import get_najia
 from .utils import get_qin6
+from .utils import get_zhi5
 from .utils import get_type
+from .utils import get_xing5_relationship
 from .utils import GZ5X
 from .utils import palace
 from .guaci_text import build_guaci_dual_payload
@@ -69,10 +72,10 @@ def _pad_cell(s: str, width: int) -> str:
     out = [s]
     while n > 0:
         if n >= 2:
-            out.append("\u3000")
+            out.append("　")
             n -= 2
         else:
-            out.append(" ")
+            out.append("　")
             n -= 1
     return "".join(out)
 
@@ -92,17 +95,18 @@ def _mark_column_min_width() -> int:
 
 def _align_hexagram_table(rows: dict) -> None:
     """各列按显示宽度对齐；卦画列不低于当前爻符最大宽度。"""
-    w = _column_width(rows["god6"])
-    rows["god6"] = _pad_column(rows["god6"], w)
+    # hack 日月, 变对齐问题.
+    # w = _column_width(rows["god6"])
+    # rows["god6"] = _pad_column(rows["god6"], w)
 
-    w = _column_width(rows["hide"]["qin6"])
-    rows["hide"]["qin6"] = _pad_column(rows["hide"]["qin6"], w)
+    # w = _column_width(rows["hide"]["qin6"])
+    # rows["hide"]["qin6"] = _pad_column(rows["hide"]["qin6"], w)
 
-    w = _column_width(rows["qin6"])
-    rows["qin6"] = _pad_column(rows["qin6"], w)
+    # w = _column_width(rows["qin6"])
+    # rows["qin6"] = _pad_column(rows["qin6"], w)
 
-    w = _column_width(rows["qinx"])
-    rows["qinx"] = _pad_column(rows["qinx"], w)
+    # w = _column_width(rows["qinx"])
+    # rows["qinx"] = _pad_column(rows["qinx"], w)
 
     mark_floor = _mark_column_min_width()
     w = max(_column_width(rows["main"]["mark"]), mark_floor)
@@ -114,8 +118,8 @@ def _align_hexagram_table(rows: dict) -> None:
     w = _column_width(rows["dyao"])
     rows["dyao"] = _pad_column(rows["dyao"], w)
 
-    w = _column_width(rows["bian"]["qin6"])
-    rows["bian"]["qin6"] = _pad_column(rows["bian"]["qin6"], w)
+    # w = _column_width(rows["bian"]["qin6"])
+    # rows["bian"]["qin6"] = _pad_column(rows["bian"]["qin6"], w)
 
     w = max(_column_width(rows["bian"]["mark"]), mark_floor)
     rows["bian"]["mark"] = _pad_column(rows["bian"]["mark"], w)
@@ -140,121 +144,107 @@ def _aux_gong_name_type(mark: str) -> dict:
     typ = get_type(mark) or ""
     return {"name": GUA64[mark], "gong": GUAS[gi], "type": typ}
 
+# def _prepare_main_bian_titles_line(rows: dict) -> None:
+#     """本卦、变卦卦名与各自爻画列左缘对齐（按显示宽度，与六神爻行一致）。"""
+#     i = 0
+#     prefix = "".join(
+#         [
+#             rows["god6"][i],
+#             rows["hide"]["qin6"][i],
+#             rows["qin6"][i],
+#             rows["qinx"][i],
+#         ]
+#     )
+#     s_main = _cell_display_width(prefix) - 1
+#     W_main = _cell_display_width(rows["main"]["mark"][i])
+#     gap_b = (
+#         rows["shiy"][i] + rows["dyao"][i] + "　"
+#     )
+#     s_bian = s_main + W_main + _cell_display_width(gap_b)
 
-def _prepare_main_bian_titles_line(rows: dict) -> None:
-    """本卦、变卦卦名与各自爻画列左缘对齐（按显示宽度，与六神爻行一致）。"""
-    i = 0
-    prefix = "".join(
-        [
-            rows["god6"][i],
-            rows["hide"]["qin6"][i],
-            rows["qin6"][i],
-            rows["qinx"][i],
-        ]
-    )
-    s_main = _cell_display_width(prefix) + 1
-    W_main = _cell_display_width(rows["main"]["mark"][i])
-    gap_b = (
-        " "
-        + rows["shiy"][i]
-        + rows["dyao"][i]
-        + " "
-        + rows["bian"]["qin6"][i]
-        + " "
-    )
-    s_bian = s_main + W_main + _cell_display_width(gap_b)
+#     mt = rows["main"].get("type") or "　　"
+#     mt += f"　{rows['main']['gong']}宫　{rows['main']['name']}"
 
-    main_type = rows["main"].get("type") or ""
-    mt = f"{rows['main']['gong']}宫:{rows['main']['name']}"
-    if main_type:
-        mt += f"({main_type})"
+#     bt = ""
+#     raw_bian = rows.get("bian")
+#     if raw_bian and raw_bian.get("name"):
+#         bt = f"{raw_bian['name']}　{raw_bian['gong']}宫　"
+#         bt += raw_bian.get("type") or ""
 
-    bt = ""
-    raw_bian = rows.get("bian")
-    if raw_bian and raw_bian.get("name"):
-        bt = f"{raw_bian['gong']}宫:{raw_bian['name']}"
-        btyp = raw_bian.get("type") or ""
-        if btyp:
-            bt += f" ({btyp})"
-
-    parts: list[str] = []
-    pos = 0
-    if pos < s_main:
-        parts.append(_pad_cell("", s_main - pos))
-        pos = s_main
-    parts.append(mt)
-    pos += _cell_display_width(mt)
-    if bt:
-        if pos < s_bian:
-            parts.append(_pad_cell("", s_bian - pos))
-            pos = s_bian
-        parts.append(bt)
-    rows["main_bian_titles_line"] = "".join(parts)
+#     parts: list[str] = []
+#     pos = 0
+#     s_main = s_main - 10
+#     if pos < s_main:
+#         parts.append(_pad_cell("", s_main - pos))
+#         pos = s_main
+#     parts.append(mt)
+#     pos += _cell_display_width(mt)
+#     if bt:
+#         if pos < s_bian:
+#             parts.append(_pad_cell("", s_bian - pos))
+#             pos = s_bian
+#         parts.append(bt)
+#     rows["main_bian_titles_line"] = "".join(parts)
 
 
-def _prepare_aux_layout(rows: dict) -> None:
-    """互贴行首；错在互与综之间居中；综与主表变卦爻同列同宽；右缘不超过变卦。"""
-    i = 0
-    prefix = "".join(
-        [
-            rows["god6"][i],
-            rows["hide"]["qin6"][i],
-            rows["qin6"][i],
-            rows["qinx"][i],
-        ]
-    )
-    w_prefix = _cell_display_width(prefix)
+# def _prepare_aux_layout(rows: dict) -> None:
+#     """互贴行首；错在互与综之间居中；综与主表变卦爻同列同宽；右缘不超过变卦。"""
+#     i = 0
+#     prefix = "".join(
+#         [
+#             rows["god6"][i],
+#             rows["hide"]["qin6"][i],
+#             rows["qin6"][i],
+#             rows["qinx"][i],
+#         ]
+#     )
+#     w_prefix = _cell_display_width(prefix)
 
-    W_main = _cell_display_width(rows["main"]["mark"][i])
-    W_bian = _cell_display_width(rows["bian"]["mark"][i])
-    gap_mid = (
-        " "
-        + rows["shiy"][i]
-        + rows["dyao"][i]
-        + " "
-        + rows["bian"]["qin6"][i]
-        + " "
-    )
-    gap_mid_w = _cell_display_width(gap_mid)
-    # 与主表「变卦爻」左缘对齐的显示宽度（行首为 0，与六神列对齐）
-    zong_col_start = w_prefix + 1 + W_main + gap_mid_w
+#     W_main = _cell_display_width(rows["main"]["mark"][i])
+#     W_bian = _cell_display_width(rows["bian"]["mark"][i])
+#     gap_mid = (
+#         "　" + rows["shiy"][i] + rows["dyao"][i] + "　" + rows["bian"]["qin6"][i] + "　"
+#     )
+#     gap_mid_w = _cell_display_width(gap_mid)
+#     # 与主表「变卦爻」左缘对齐的显示宽度（行首为 0，与六神列对齐）
+#     zong_col_start = w_prefix + 1 + W_main + gap_mid_w
 
-    mark_floor = _mark_column_min_width()
-    M_inner = zong_col_start
-    g_min = 1
-    W_pair = max(mark_floor, (M_inner - 2 * g_min) // 2)
-    if 2 * W_pair > M_inner:
-        W_pair = max(1, M_inner // 2)
-    leftover = M_inner - 2 * W_pair
-    if leftover < 0:
-        W_pair = max(1, M_inner // 2)
-        leftover = M_inner - 2 * W_pair
-    g1 = (leftover + 1) // 2
-    g2 = leftover // 2
+#     mark_floor = _mark_column_min_width()
+#     M_inner = zong_col_start
+#     g_min = 1
+#     W_pair = max(mark_floor, (M_inner - 2 * g_min) // 2)
+#     if 2 * W_pair > M_inner:
+#         W_pair = max(1, M_inner // 2)
+#     leftover = M_inner - 2 * W_pair
+#     if leftover < 0:
+#         W_pair = max(1, M_inner // 2)
+#         leftover = M_inner - 2 * W_pair
+#     g1 = (leftover + 1) // 2
+#     g2 = leftover // 2
 
-    rows["gap_hu_cuo"] = _pad_cell("", g1)
-    rows["gap_cuo_zong"] = _pad_cell("", g2)
+#     rows["gap_hu_cuo"] = _pad_cell("", g1)
+#     rows["gap_cuo_zong"] = _pad_cell("", g2)
 
-    for j in range(6):
-        rows["hu"]["mark"][j] = _pad_cell(rows["hu"]["mark"][j], W_pair)
-        rows["cuo"]["mark"][j] = _pad_cell(rows["cuo"]["mark"][j], W_pair)
-        rows["zong"]["mark"][j] = _pad_cell(rows["zong"]["mark"][j], W_bian)
+#     for j in range(6):
+#         rows["hu"]["mark"][j] = _pad_cell(rows["hu"]["mark"][j], W_pair)
+#         rows["cuo"]["mark"][j] = _pad_cell(rows["cuo"]["mark"][j], W_pair)
+#         rows["zong"]["mark"][j] = _pad_cell(rows["zong"]["mark"][j], W_bian)
 
-    def one(label: str, h: dict) -> str:
-        t = f"({h['type']})" if h.get("type") else ""
-        return f"{label}{h['gong']}宫:{h['name']}{t}"
+#     def one(label: str, h: dict) -> str:
+#         t = f"({h['type']})" if h.get("type") else ""
+#         return f"{label}{h['gong']}宫:{h['name']}{t}"
 
-    titles = [one("互卦", rows["hu"]), one("错卦", rows["cuo"]), one("综卦", rows["zong"])]
-    s0, s1, s2 = 0, W_pair + g1, zong_col_start
-    parts: list[str] = []
-    pos = 0
-    for t, s in zip(titles, [s0, s1, s2]):
-        if pos < s:
-            parts.append(_pad_cell("", s - pos))
-            pos = s
-        parts.append(t)
-        pos += _cell_display_width(t)
-    rows["aux_titles_line"] = "".join(parts)
+#     titles = [one("互卦", rows["hu"]), one("错卦", rows["cuo"]), one("综卦", rows["zong"])]
+#     s0, s1, s2 = 0, W_pair + g1, zong_col_start
+#     parts: list[str] = []
+#     pos = 0
+#     for t, s in zip(titles, [s0, s1, s2]):
+#         if pos < s:
+#             parts.append(_pad_cell("", s - pos))
+#             pos = s
+#         parts.append(t)
+#         pos += _cell_display_width(t)
+#     rows["aux_titles_line"] = "".join(parts)
 
 
 class Najia(object):
@@ -353,13 +343,17 @@ class Najia(object):
             # 干支五行
             qinx = [GZ5X(x) for x in get_najia(mark)]
             seat = [qin6.index(x) for x in list(set(qin6).difference(set(qins)))]
+            numc = [""] * 6
+            for i in seat:
+                numc[i] = NUMCIR[i]
 
             return {
                 "name": GUA64.get(mark),
                 "mark": mark,
                 "qin6": qin6,
                 "qinx": qinx,
-                "seat": seat,
+                "seat": seat, # 指定伏神位置
+                "numc": numc, # 特殊符号
             }
 
         return None
@@ -397,6 +391,7 @@ class Najia(object):
                 "qin6": qin6,
                 "qinx": qinx,
                 "gong": GUAS[palace(mark, set_shi_yao(mark)[0])],
+                "extra": get_type(mark) or "　　",
             }
 
         return None
@@ -406,7 +401,6 @@ class Najia(object):
     ):
         """
         根据参数编译卦
-
         :param guaci:
         :param title:
         :param gender:
@@ -419,6 +413,13 @@ class Najia(object):
 
         solar = arrow.now() if date is None else arrow.get(date)
         lunar = self._daily(solar)
+        gz = lunar["gz"]
+        lunar["gz5"] = {
+            "year": f"{gz['year']}{get_zhi5(gz['year'])}",
+            "month": f"{gz['month']}{get_zhi5(gz['month'])}",
+            "day": f"{gz['day']}{get_zhi5(gz['day'])}",
+            "hour": f"{gz['hour']}{get_zhi5(gz['hour'])}",
+        }
 
         # gender = '男' if gender == 1 else '女'
         gender = ("", gender)[bool(gender)]
@@ -433,6 +434,9 @@ class Najia(object):
 
         # 卦名
         name = GUA64[mark]
+
+        # 其它信息
+        extra = get_type(mark) or "　　"
 
         # 六亲
         qin6 = [
@@ -457,23 +461,33 @@ class Najia(object):
         # 变卦
         bian = self._transform(params=params, gong=gong)
 
-        self.data = {
+        # analysis 合冲刑分析
+        # yao_month = get_xing5_relationship(lunar["gz5"]["month"][-1], qinx[0][-1])
+        # bug: 还需要查询五行关系和, 地支关系.
+        # subject = lunar["gz5"]["month"][-1]
+        # yao_month = [
+        #     get_xing5_relationship(subject, qinx[i][-1])
+        #     for i in range(6)
+        # ]
+
+        self.data = {           # [] 整理后的参数集
             "params": params,
             "gender": gender,
             "title": title,
             "guaci": guaci,
-            "solar": solar,
-            "lunar": lunar,
-            "god6": god6,
-            "dong": dong,
-            "name": name,
-            "mark": mark,
-            "gong": GUAS[gong],
-            "shiy": shiy,
-            "qin6": qin6,
-            "qinx": qinx,
-            "bian": bian,
-            "hide": hide,
+            "solar": solar,     # 阳历
+            "lunar": lunar,     # 阴历
+            "god6": god6,       # 六神
+            "dong": dong,       # 动爻
+            "name": name,       # 卦名
+            "extra": extra,     # 其它信息, 游魂, 归魂, 六冲, 六合.
+            "mark": mark,       # 阴阳
+            "gong": GUAS[gong], # 宫名
+            "shiy": shiy,       # 世应
+            "qin6": qin6,       # 六亲
+            "qinx": qinx,       # 天干地支五行
+            "bian": bian,       # 变爻
+            "hide": hide,       # 伏爻
         }
 
         # logger.debug(self.data)
@@ -502,7 +516,6 @@ class Najia(object):
         tpl = Path(__file__).parent / "data" / "standard.tpl"
         tpl = tpl.read_text(encoding="utf-8")
 
-        empty = "\u3000" * 6
         rows = self.data
 
         symbal = SYMBOL
@@ -510,22 +523,22 @@ class Najia(object):
 
         rows["main"] = {}
         rows["main"]["mark"] = [symbal[int(x)] for x in self.data["mark"]]
-        rows["main"]["type"] = get_type(self.data["mark"])
 
-        rows["main"]["gong"] = rows["gong"]
-        rows["main"]["name"] = rows["name"]
-
+        # hack  变爻显示问题
         if rows.get("hide"):
             rows["hide"]["qin6"] = [
                 (
-                    " %s%s " % (rows["hide"]["qin6"][x], rows["hide"]["qinx"][x])
+                    "%s%s%s" % (rows["hide"]["qin6"][x], rows["hide"]["qinx"][x], rows["hide"]["numc"][x])
                     if x in rows["hide"]["seat"]
-                    else empty
+                    else "" # "　" * 8
                 )
                 for x in range(0, 6)
             ]
         else:
-            rows["hide"] = {"qin6": [empty for _ in range(0, 6)]}
+            rows["hide"] = {
+                    "numc": [""] * 6,
+                    "qin6": [""] * 6,
+                }
 
         mark_bin = self.data["mark"]
         hu_m, cuo_m, zong_m = _derive_hu_cuo_zong(mark_bin)
@@ -545,26 +558,26 @@ class Najia(object):
         if rows.get("bian"):
             rows["bian"]["type"] = get_type(rows["bian"]["mark"])
 
+            if rows["bian"]["mark"]:
+                rows["bian"]["mark"] = [x for x in rows["bian"]["mark"]]
+                rows["bian"]["mark"] = [
+                    symbal[int(rows["bian"]["mark"][x])] for x in range(0, 6)
+                ]
+
             if rows["bian"]["qin6"]:
                 # 变卦六亲问题
                 rows["bian"]["qin6"] = [
                     (
                         f'{rows["bian"]["qin6"][x]}{rows["bian"]["qinx"][x]}'
                         if x in self.data["dong"]
-                        else f'  {rows["bian"]["qin6"][x]}{rows["bian"]["qinx"][x]}'
+                        else f'{rows["bian"]["qin6"][x]}{rows["bian"]["qinx"][x]}'
                     )
                     for x in range(0, 6)
                 ]
-
-            if rows["bian"]["mark"]:
-                rows["bian"]["mark"] = [x for x in rows["bian"]["mark"]]
-                rows["bian"]["mark"] = [
-                    symbal[int(rows["bian"]["mark"][x])] for x in range(0, 6)
-                ]
         else:
             rows["bian"] = {
-                "qin6": ["\u3000" for _ in range(0, 6)],
-                "mark": ["\u3000" for _ in range(0, 6)],
+                "qin6": ["　" for _ in range(0, 6)],
+                "mark": ["　" for _ in range(0, 6)],
             }
 
         shiy = []
@@ -576,14 +589,13 @@ class Najia(object):
             elif x == self.data["shiy"][1] - 1:
                 shiy.append("应")
             else:
-                shiy.append("\u3000")
+                shiy.append("　")
 
         rows["shiy"] = shiy
 
         _align_hexagram_table(rows)
-
-        _prepare_main_bian_titles_line(rows)
-        _prepare_aux_layout(rows)
+        # _prepare_main_bian_titles_line(rows)
+        # _prepare_aux_layout(rows)
 
         # 注意：rows 即 self.data，勿把「是否显示卦辞」布尔量 guaci 改成字符串，否则 GUI 的 guaci_dual_payload 会失灵。
         rows["guaci_text"] = ""
