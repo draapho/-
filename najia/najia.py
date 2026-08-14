@@ -25,6 +25,8 @@ from .utils import get_qin6
 from .utils import get_zhi5
 from .utils import get_type
 from .utils import get_xing5_relationship
+from .utils import get_chonghe_relation
+from .utils import get_xunkong
 from .utils import GZ5X
 from .utils import palace
 from .guaci_text import build_guaci_dual_payload
@@ -81,16 +83,16 @@ def _pad_cell(s: str, width: int) -> str:
 
 
 def _pad_column(vals: list, width: int) -> list:
-    return [_pad_cell(vals[i], width) for i in range(6)]
+    return [_pad_cell(vals[i], width) for i in range(len(vals))]
 
 
 def _column_width(vals: list) -> int:
-    return max(_cell_display_width(vals[i]) for i in range(6))
+    return max(_cell_display_width(vals[i]) for i in range(len(vals)))
 
 
 def _mark_column_min_width() -> int:
     """本卦/变卦爻画最小列宽（阴、阳、动阴、动阳）。"""
-    return max(_cell_display_width(SYMBOL[i]) for i in range(4))
+    return max(_cell_display_width(SYMBOL[i]) for i in range(len(SYMBOL)))
 
 
 def _align_hexagram_table(rows: dict) -> None:
@@ -108,6 +110,10 @@ def _align_hexagram_table(rows: dict) -> None:
     # w = _column_width(rows["qinx"])
     # rows["qinx"] = _pad_column(rows["qinx"], w)
 
+    FIXED_QINX_WIDTH = 8
+    rows["yaom"] = _pad_column(rows["yaom"], FIXED_QINX_WIDTH)
+    rows["yaod"] = _pad_column(rows["yaod"], FIXED_QINX_WIDTH)
+
     mark_floor = _mark_column_min_width()
     w = max(_column_width(rows["main"]["mark"]), mark_floor)
     rows["main"]["mark"] = _pad_column(rows["main"]["mark"], w)
@@ -118,11 +124,15 @@ def _align_hexagram_table(rows: dict) -> None:
     w = _column_width(rows["dyao"])
     rows["dyao"] = _pad_column(rows["dyao"], w)
 
-    # w = _column_width(rows["bian"]["qin6"])
-    # rows["bian"]["qin6"] = _pad_column(rows["bian"]["qin6"], w)
+    if rows.get("bian"):
+        w = max(_column_width(rows["bian"]["mark"]), mark_floor) + 1
+        rows["bian"]["mark"] = _pad_column(rows["bian"]["mark"], w)
 
-    w = max(_column_width(rows["bian"]["mark"]), mark_floor)
-    rows["bian"]["mark"] = _pad_column(rows["bian"]["mark"], w)
+        # w = _column_width(rows["bian"]["qin6"])
+        # rows["bian"]["qin6"] = _pad_column(rows["bian"]["qin6"], w)
+
+        FIXED_QINX_WIDTH = 6
+        rows["bian"]["dong"] = _pad_column(rows["bian"]["dong"], FIXED_QINX_WIDTH)
 
     # 互/错/综爻宽在 _prepare_aux_layout 中按「本卦—变卦」横向宽度再分配
 
@@ -323,40 +333,39 @@ class Najia(object):
         :param qins:
         :return:
         """
-        if gong is None:
-            raise Exception("")
+        if gong is None or qins is None:
+            raise ValueError("gong 与 qins 参数不可为 None")
 
-        if qins is None:
-            raise Exception("")
+        qinx = [""] * 6       # 伏神干支五行
+        qin6 = [""] * 6       # 伏神六亲
+        numc = [""] * 6       # 特殊符号
 
         if len(set(qins)) < 5:
             mark = YAOS[gong] * 2
-
             logger.debug(mark)
 
             # 六亲
-            qin6 = [
+            najia = get_najia(mark)
+            qin6_hide = [
                 (get_qin6(XING5[int(GUA5[gong])], ZHI5[ZHIS.index(x[1])]))
-                for x in get_najia(mark)
+                for x in najia
             ]
-
             # 干支五行
-            qinx = [GZ5X(x) for x in get_najia(mark)]
-            seat = [qin6.index(x) for x in list(set(qin6).difference(set(qins)))]
-            numc = [""] * 6
-            for i in seat:
-                numc[i] = NUMCIR[i]
+            qinx_hide = [GZ5X(x) for x in najia]
+            qin_missing = [qin6.index(x) for x in list(set(qin6).difference(set(qins)))]
 
-            return {
-                "name": GUA64.get(mark),
-                "mark": mark,
-                "qin6": qin6,
-                "qinx": qinx,
-                "seat": seat, # 指定伏神位置
-                "numc": numc, # 特殊符号
-            }
+            for idx in qin_missing:
+                qinx[idx] = qinx_hide[idx]
+                qin6[idx] = qin6_hide[idx]
+                numc[idx] = NUMCIR[idx]
 
-        return None
+        return {
+            "name": GUA64.get(mark) if len(set(qins)) < 5 else None,
+            "mark": mark if len(set(qins)) < 5 else None,
+            "qinx": qinx,
+            "qin6": qin6,
+            "numc": numc,
+        }
 
     @staticmethod
     def _transform(params=None, gong=None):
@@ -461,14 +470,46 @@ class Najia(object):
         # 变卦
         bian = self._transform(params=params, gong=gong)
 
-        # analysis 合冲刑分析
-        # yao_month = get_xing5_relationship(lunar["gz5"]["month"][-1], qinx[0][-1])
+        # analysis 五行, 相旺休囚死
+        gz5_m = lunar["gz5"]["month"]
+        gz5_d = lunar["gz5"]["day"]
+        yao_month = [[get_xing5_relationship(gz5_m, qinx[i])] for i in range(6)]
+        yao_month.extend(
+            [[get_xing5_relationship(gz5_m, hide["qinx"][i] if hide["qinx"][i] else "")] for i in range(6)])
+        yao_day = [[get_xing5_relationship(gz5_d, qinx[i])] for i in range(6)]
+        yao_day.extend([[get_xing5_relationship(gz5_d, hide["qinx"][i] if hide["qinx"][i] else "")] for i in range(6)])
+
+        if bian:
+            bian["yaom"] = [[get_xing5_relationship(gz5_m, bian["qinx"][i])] for i in range(6)]
+            bian["yaod"] = [[get_xing5_relationship(gz5_d, bian["qinx"][i])] for i in range(6)]
+            bian["dong"] = [[get_xing5_relationship(bian["qinx"][i], qinx[i])] for i in range(6)]  # hack, 考虑文字, 现在用的是  相旺休囚死.
+
+        # analysis 冲合分析
+        for i in range(6):
+            yao_month[i].append(get_chonghe_relation(gz5_m, qinx[i]))
+            yao_day[i].append(get_chonghe_relation(gz5_d, qinx[i]))
+            if bian:
+                bian["yaom"][i].append(get_chonghe_relation(gz5_m, bian["qinx"][i]))
+                bian["yaod"][i].append(get_chonghe_relation(gz5_d, bian["qinx"][i]))
+                bian["dong"][i].append(get_chonghe_relation(bian["qinx"][i], qinx[i]))
+        for i in range(6):
+            yao_month[i + 6].append(get_chonghe_relation(gz5_m, hide["qinx"][i]))
+            yao_day[i + 6].append(get_chonghe_relation(gz5_d, hide["qinx"][i]))
+
+        # 旬空. 仅日辰考虑, 且变爻不论旬空.
+        for i in range(6):
+            yao_day[i].append(get_xunkong(lunar["xkong"], qinx[i]))
+        for i in range(6):
+            yao_day[i + 6].append(get_xunkong(lunar["xkong"], hide["qinx"][i]))
+
         # bug: 还需要查询五行关系和, 地支关系.
-        # subject = lunar["gz5"]["month"][-1]
-        # yao_month = [
-        #     get_xing5_relationship(subject, qinx[i][-1])
-        #     for i in range(6)
-        # ]
+        # 库墓
+
+        # 长生??
+
+        # 刑, 害
+
+        # 三刑, 三合.
 
         self.data = {           # [] 整理后的参数集
             "params": params,
@@ -488,6 +529,8 @@ class Najia(object):
             "qinx": qinx,       # 天干地支五行
             "bian": bian,       # 变爻
             "hide": hide,       # 伏爻
+            "yaom": yao_month,  # 各爻基于月的分析
+            "yaod": yao_day,    # 各爻基于日的分析
         }
 
         # logger.debug(self.data)
@@ -524,22 +567,6 @@ class Najia(object):
         rows["main"] = {}
         rows["main"]["mark"] = [symbal[int(x)] for x in self.data["mark"]]
 
-        # hack  变爻显示问题
-        if rows.get("hide"):
-            rows["hide"]["qin6"] = [
-                (
-                    "%s%s%s" % (rows["hide"]["qin6"][x], rows["hide"]["qinx"][x], rows["hide"]["numc"][x])
-                    if x in rows["hide"]["seat"]
-                    else "" # "　" * 8
-                )
-                for x in range(0, 6)
-            ]
-        else:
-            rows["hide"] = {
-                    "numc": [""] * 6,
-                    "qin6": [""] * 6,
-                }
-
         mark_bin = self.data["mark"]
         hu_m, cuo_m, zong_m = _derive_hu_cuo_zong(mark_bin)
         rows["hu"] = {
@@ -559,26 +586,10 @@ class Najia(object):
             rows["bian"]["type"] = get_type(rows["bian"]["mark"])
 
             if rows["bian"]["mark"]:
-                rows["bian"]["mark"] = [x for x in rows["bian"]["mark"]]
+                rows["bian"]["mark"] = list(rows["bian"]["mark"])
                 rows["bian"]["mark"] = [
                     symbal[int(rows["bian"]["mark"][x])] for x in range(0, 6)
                 ]
-
-            if rows["bian"]["qin6"]:
-                # 变卦六亲问题
-                rows["bian"]["qin6"] = [
-                    (
-                        f'{rows["bian"]["qin6"][x]}{rows["bian"]["qinx"][x]}'
-                        if x in self.data["dong"]
-                        else f'{rows["bian"]["qin6"][x]}{rows["bian"]["qinx"][x]}'
-                    )
-                    for x in range(0, 6)
-                ]
-        else:
-            rows["bian"] = {
-                "qin6": ["　" for _ in range(0, 6)],
-                "mark": ["　" for _ in range(0, 6)],
-            }
 
         shiy = []
 

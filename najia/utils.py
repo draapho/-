@@ -266,6 +266,16 @@ def get_zhi5(text: str) -> str:
         return const.XING5[const.ZHI5[const.ZHIS.index(zhi)]]
     return ""
 
+def _extract_xing5(s: str) -> str:
+    """
+    从固定格式的干支字符串中提取五行
+
+    Args:
+        s: 固定格式的干支/纳音字符串
+    Returns:
+        地支字符; 长度异常时返回空字符串
+    """
+    return s[-1] if s else ""
 
 def get_xing5_relationship(a: str, b: str, rtn="b") -> str:
     """
@@ -283,16 +293,63 @@ def get_xing5_relationship(a: str, b: str, rtn="b") -> str:
     _RELATION_MAP_A_SHENKE = {0: "比", 1: "生", 2: "克", 3: "耗", 4: "泄"}      # 对应于{A同B, A生B, A克B, A耗B(B克A), A泄B(B生A)}
     _RELATION_MAP_B_WANGSHUAI = {0: "旺", 1: "相", 2: "死", 3: "囚", 4: "休"}   # 对应于{A同B, A生B, A克B, A耗B(B克A), A泄B(B生A)}
 
-    if a not in _INDEX_MAP or b not in _INDEX_MAP:
+    xing1 = _extract_xing5(a);
+    xing2 = _extract_xing5(b);
+    if xing1 not in _INDEX_MAP or xing2 not in _INDEX_MAP:
         return ""
 
-    diff = (_INDEX_MAP[b] - _INDEX_MAP[a]) % 5
+    diff = (_INDEX_MAP[xing2] - _INDEX_MAP[xing1]) % 5
 
     if 'a' == rtn.lower().strip():
         return _RELATION_MAP_A_SHENKE[diff]
     else:
         return _RELATION_MAP_B_WANGSHUAI[diff]
 
+def _extract_zhi(s: str) -> str:
+    """
+    从固定格式的干支字符串中提取地支
+
+    支持格式:
+        - 1字: "子"       → s[0]
+        - 2字: "甲子"     → s[1]
+        - 3字: "甲子水"   → s[1]
+
+    Args:
+        s: 固定格式的干支/纳音字符串
+    Returns:
+        地支字符; 长度异常时返回空字符串
+    """
+    length = len(s)
+    if length == 1:
+        return s[0]
+    if length in (2, 3):
+        return s[1]
+    return ""
+
+def get_chonghe_relation(d1: str, d2: str) -> str:
+    """
+    判断两个地支的六冲/六合关系
+    Args:
+        d1: 第一个地支
+        d2: 第二个地支
+    Returns:
+        "六冲" / "六合" / None
+    """
+
+    zhi1 = _extract_zhi(d1)
+    zhi2 = _extract_zhi(d2)
+    if not zhi1 or not zhi2:
+        return ""
+
+    key = frozenset((zhi1, zhi2))
+    return const.CHONG6.get(key) or const.HE6.get(key) or ""
+
+def get_xunkong(kong: str, d1: str) -> str:
+    zhi1 = _extract_zhi(d1)
+    if zhi1 in kong:
+        return "旬空"
+    else:
+        return ""
 
 def get_guaci(name=None):
     import pickle
