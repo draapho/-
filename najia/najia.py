@@ -27,6 +27,10 @@ from .utils import get_type
 from .utils import get_xing5_relationship
 from .utils import get_chonghe_relation
 from .utils import get_xunkong
+from .utils import get_muku
+from .utils import get_xing3
+from .utils import get_he3
+from .utils import get_mark3
 from .utils import GZ5X
 from .utils import palace
 from .guaci_text import build_guaci_dual_payload
@@ -352,7 +356,7 @@ class Najia(object):
             ]
             # 干支五行
             qinx_hide = [GZ5X(x) for x in najia]
-            qin_missing = [qin6.index(x) for x in list(set(qin6).difference(set(qins)))]
+            qin_missing = [qin6_hide.index(x) for x in list(set(qin6_hide).difference(set(qins)))]
 
             for idx in qin_missing:
                 qinx[idx] = qinx_hide[idx]
@@ -484,7 +488,7 @@ class Najia(object):
             bian["yaod"] = [[get_xing5_relationship(gz5_d, bian["qinx"][i])] for i in range(6)]
             bian["dong"] = [[get_xing5_relationship(bian["qinx"][i], qinx[i])] for i in range(6)]  # hack, 考虑文字, 现在用的是  相旺休囚死.
 
-        # analysis 冲合分析
+        # 冲合刑害分析
         for i in range(6):
             yao_month[i].append(get_chonghe_relation(gz5_m, qinx[i]))
             yao_day[i].append(get_chonghe_relation(gz5_d, qinx[i]))
@@ -496,20 +500,51 @@ class Najia(object):
             yao_month[i + 6].append(get_chonghe_relation(gz5_m, hide["qinx"][i]))
             yao_day[i + 6].append(get_chonghe_relation(gz5_d, hide["qinx"][i]))
 
-        # 旬空. 仅日辰考虑, 且变爻不论旬空.
+        # 旬空. 仅日辰考虑.
         for i in range(6):
             yao_day[i].append(get_xunkong(lunar["xkong"], qinx[i]))
+            if bian:
+                bian["yaod"][i].append(get_xunkong(lunar["xkong"], bian["qinx"][i]))
         for i in range(6):
             yao_day[i + 6].append(get_xunkong(lunar["xkong"], hide["qinx"][i]))
 
-        # bug: 还需要查询五行关系和, 地支关系.
-        # 库墓
-
-        # 长生??
-
-        # 刑, 害
+        # 墓库
+        for i in range(6):
+            yao_month[i].append(get_muku(gz5_m, qinx[i]))
+            yao_day[i].append(get_muku(gz5_d, qinx[i]))
+            if bian:
+                bian["yaom"][i].append(get_muku(gz5_m, bian["qinx"][i]))
+                bian["yaod"][i].append(get_muku(gz5_d, bian["qinx"][i]))
+                bian["dong"][i].append(get_muku(bian["qinx"][i], qinx[i]))
+        for i in range(6):
+            yao_month[i + 6].append(get_muku(gz5_m, hide["qinx"][i]))
+            yao_day[i + 6].append(get_muku(gz5_d, hide["qinx"][i]))
 
         # 三刑, 三合.
+        dong_yao = [qinx[i] for i in dong] # 提取动爻干支
+        bian_yao = [bian["qinx"][i] for i in dong]  # 提取变爻干支
+        jing_yao = [qinx[i] for i in range(6) if i not in dong] # 提取静止爻干支
+        hide_yao = [x for x in hide["qinx"] if x]   # 伏神
+
+        yao_force = [gz5_m, gz5_d] + dong_yao
+        yao_option = jing_yao + bian_yao + hide_yao
+        desche3 = get_he3(yao_force, yao_option)
+        descxing3 = get_xing3(yao_force, yao_option)
+
+        # 增加三刑, 三合相关爻的提示.
+        for i in range(6):
+            yao_month[i].append(get_mark3(qinx[i], desche3, descxing3, yao_force, i not in dong)[-1:])
+            if bian:
+                bian["yaom"][i].append(get_mark3(bian["qinx"][i], desche3, descxing3, yao_force, True)[-1:])
+        for i in range(6):
+            yao_month[i + 6].append(get_mark3(hide["qinx"][i], desche3, descxing3, yao_force, True)[-1:])
+        lunar["gz5"]["year"] += "年"
+        lunar["gz5"]["month"] += "月" + (get_mark3(gz5_m, desche3, descxing3)[-1:] or "　")
+        lunar["gz5"]["day"] += "日" + (get_mark3(gz5_d, desche3, descxing3)[-1:] or "　")
+        lunar["gz5"]["hour"] += "时"
+
+        # bug: 还需要查询 动爻, 变爻的关系, 库墓
+            # bian["dong"]
 
         self.data = {           # [] 整理后的参数集
             "params": params,
@@ -531,6 +566,8 @@ class Najia(object):
             "hide": hide,       # 伏爻
             "yaom": yao_month,  # 各爻基于月的分析
             "yaod": yao_day,    # 各爻基于日的分析
+            "desche3": desche3, # 三合描述
+            "descxing3": descxing3, # 三刑描述
         }
 
         # logger.debug(self.data)
@@ -607,6 +644,9 @@ class Najia(object):
         _align_hexagram_table(rows)
         # _prepare_main_bian_titles_line(rows)
         # _prepare_aux_layout(rows)
+
+        # hack        "㊂"
+        # hack: 需要处理日月, 动, desc部分的语句显示问题.
 
         # 注意：rows 即 self.data，勿把「是否显示卦辞」布尔量 guaci 改成字符串，否则 GUI 的 guaci_dual_payload 会失灵。
         rows["guaci_text"] = ""

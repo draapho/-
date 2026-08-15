@@ -1,6 +1,7 @@
 import logging
 import math
 from pathlib import Path
+from typing import List, Dict, Any, Set
 
 from . import const
 
@@ -333,7 +334,7 @@ def get_chonghe_relation(d1: str, d2: str) -> str:
         d1: 第一个地支
         d2: 第二个地支
     Returns:
-        "六冲" / "六合" / None
+        "六冲" / "六合" / "六害" / "无礼刑" / "自刑" / None
     """
 
     zhi1 = _extract_zhi(d1)
@@ -341,8 +342,19 @@ def get_chonghe_relation(d1: str, d2: str) -> str:
     if not zhi1 or not zhi2:
         return ""
 
+    if zhi1 == zhi2:
+        if zhi1 in const.XING3["one"]:
+            return "自刑"
+        return ""  # 非自刑地支相重，无特殊相克/相刑关系
+
     key = frozenset((zhi1, zhi2))
-    return const.CHONG6.get(key) or const.HE6.get(key) or ""
+    return (
+        const.CHONG6.get(key)
+        or const.HE6.get(key)
+        or const.HAI6.get(key)
+        or const.XING3["two"].get(key)
+        or ""
+    )
 
 def get_xunkong(kong: str, d1: str) -> str:
     zhi1 = _extract_zhi(d1)
@@ -350,6 +362,155 @@ def get_xunkong(kong: str, d1: str) -> str:
         return "旬空"
     else:
         return ""
+
+def get_muku(muku: str, d1: str) -> str:
+    """
+    判断第一个地支是否为墓库, 以及第二个地支是否能入该墓库.
+
+    :param muku: 第一个地支 (待判断是否为墓库)
+    :param d1: 第二个地支 (待判断是否入墓库)
+    """
+
+    mukuzhi = _extract_zhi(muku)
+    dstzhi = _extract_zhi(d1)
+    if not mukuzhi or not dstzhi:
+        return ""
+
+    # 定义墓库与其对应的可入墓地支集合
+    # 辰为水墓(亥/子), 戌为火墓(巳/午), 丑为金墓(申/酉), 未为木墓(寅/卯)
+    TOMB_MAP = {
+        "辰": {"branches": {"亥", "子", "辰", "戌", "丑", "未"}, "name": "辰墓"},
+        "戌": {"branches": {"巳", "午"}, "name": "戌墓"},
+        "丑": {"branches": {"申", "酉"}, "name": "丑墓"},
+        "未": {"branches": {"寅", "卯"}, "name": "未墓"}
+    }
+
+    if mukuzhi not in TOMB_MAP:
+        return ""
+
+    if dstzhi in TOMB_MAP[mukuzhi]["branches"]:
+        return TOMB_MAP[mukuzhi]["name"]
+
+    return ""
+
+def get_he3(force: List[str], option: List[str]) -> List[str]:
+    """
+    三合局与半合局判定函数
+
+    :param force: 必须存在的地支 (日, 月, 变/动)
+    :param option: 可以不存在的地支 (静爻)
+    :return: 如 ['水合: 申子辰', '水合: 申子辰缺子']
+    """
+
+    # 提取并过滤有效地支
+    force_set = set(filter(None, [_extract_zhi(b) for b in force]))
+    option_set = set(filter(None, [_extract_zhi(b) for b in option]))
+    all_set = force_set.union(option_set)
+
+    results = []
+
+    for combo_set, name in const.HE3.items():
+        # 第一组必须有地支参与，否则不具备主导作用，直接跳过
+        force_present = combo_set.intersection(force_set)
+        if not force_present:
+            continue
+
+        all_present = combo_set.intersection(all_set)
+
+        # 获取当前三合局的标准顺序字符串 (例如 "申子辰")
+        standard_order = const.HE3_ORDER_MAP.get(name, [])
+        standard_str = "".join(standard_order)
+
+        # 1. 完整三合局
+        if len(all_present) == 3:
+            results.append(f"{name}: {standard_str}")
+
+        # 2. 半合局：全局凑齐 2 个地支，且第一组有参与
+        elif len(all_present) == 2:
+            missing_set = combo_set - all_present
+            if missing_set:
+                missing = list(missing_set)[0]
+                results.append(f"{name}: {standard_str}缺{missing}")
+
+    return results
+
+def get_xing3(force: List[str], option: List[str]) -> List[str]:
+    """
+    三刑与半刑判定函数
+
+    :param force: 必须存在的地支 (日, 月, 变/动)
+    :param option: 可以不存在的地支 (静爻)
+    :return: 如 ['无恩刑: 寅巳申']
+    """
+    # 严格限定三刑地支的标准顺序
+    ORDER_MAP = {
+        "无恩": ["寅", "巳", "申"],
+        "恃势": ["丑", "戌", "未"],
+    }
+
+    # 提取并过滤有效地支
+    force_set = set(filter(None, [_extract_zhi(b) for b in force]))
+    option_set = set(filter(None, [_extract_zhi(b) for b in option]))
+    all_set = force_set.union(option_set)
+
+    results = []
+
+    for combo_set, name in const.XING3["three"].items():
+        # 第一组必须有地支参与，否则不具备主导作用，直接跳过
+        force_present = combo_set.intersection(force_set)
+        if not force_present:
+            continue
+
+        all_present = combo_set.intersection(all_set)
+
+        # 获取当前三刑的标准顺序字符串 (例如 "寅巳申")
+        standard_order = ORDER_MAP.get(name, [])
+        standard_str = "".join(standard_order)
+
+        # 1. 完整三刑: 全局凑齐 3 个地支
+        if len(all_present) == 3:
+            results.append(f"{name}: {standard_str}")
+
+        # 2. 半刑: 全局凑齐 2 个地支，且第一组有参与
+        # elif len(all_present) == 2:
+        #     missing = (combo_set - all_present).pop()
+        #     results.append(f"{name}: {standard_str}缺{missing}")
+
+    return results
+
+def get_mark3(d1: str, desche3: List[str], descxing3: List[str], yao_exlude = "", is_option = False) -> str:
+    """
+    通过字符串频次直接判断地支是否存在于合局或刑局中.
+    
+    :param target_zhi: 目标地支 (如 '申', '辰')
+    :param desche3: 三合列表 (如 ['水合: 申子辰缺辰'])
+    :param descxing3: 三刑列表
+    :param yao_exlude: 强制地支列表/集合，用于排除重复提示
+    :param is_option: 当前输入的 d1 是否属于可选地支 (如静爻/伏神)
+    :return: "双㊂", "合㊂", "刑㊂", 或 ""
+    """
+    target_zhi = _extract_zhi(d1)
+    if not target_zhi:
+        return ""
+
+    if yao_exlude and is_option:
+        exlude_set = set(filter(None, [_extract_zhi(b) for b in yao_exlude]))
+        if target_zhi in exlude_set:
+            return ""
+        
+    # 在描述字符串中，如果地支存在且未缺失，它只会出现 1 次
+    # 如果地支缺失 (如 '申子辰缺辰')，它会出现在标准名和缺字后，共出现 2 次
+    matched_he = any(desc.count(target_zhi) == 1 for desc in desche3)
+    matched_xing = any(desc.count(target_zhi) == 1 for desc in descxing3)
+
+    if matched_he and matched_xing:
+        return "双㊂"
+    elif matched_he:
+        return "合㊂"
+    elif matched_xing:
+        return "刑㊂"
+    
+    return ""
 
 def get_guaci(name=None):
     import pickle
