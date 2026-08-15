@@ -171,7 +171,7 @@ class NajiaApp(tk.Tk):
         # ttk.Entry(row3, textvariable=self.gender_var, width=8).pack(
         #     side=tk.LEFT, padx=6
         # )
-        self.guaci_var = tk.BooleanVar(value=False)
+        self.guaci_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(row3, text="显示卦辞", variable=self.guaci_var).pack(
             side=tk.LEFT, padx=8
         )
@@ -401,7 +401,7 @@ class NajiaApp(tk.Tk):
 
     def _run(self) -> None:
         date_s = self.date_var.get().strip()
-        try:   
+        try:
             if len(date_s) == 12 and date_s.isdigit():
                 dt = arrow.get(date_s, "YYYYMMDDHHmm")
             elif len(date_s) == 13 and date_s.replace(".", "").isdigit():
@@ -444,7 +444,8 @@ class NajiaApp(tk.Tk):
             title=title or None,
             guaci=guaci,
         )
-        text = n.render(embed_guaci_plain=not guaci)
+        text = n.render() # embed_guaci_plain=not guaci
+
         # except Exception as ex:
         #     messagebox.showerror("排盘失败", str(ex))
         #     return
@@ -452,12 +453,13 @@ class NajiaApp(tk.Tk):
         self.hex_text.delete("1.0", tk.END)
         self.hex_text.insert(tk.END, text.rstrip() + "\n")
 
-        payload = n.guaci_dual_payload() if guaci else None
-        if payload:
-            self.guaci_outer.pack(fill=tk.X, pady=(6, 0))
-            self._fill_guaci_panels(payload)
-        else:
-            self.guaci_outer.pack_forget()
+        # [] 取消了独立窗口显示卦辞爻辞功能
+        # payload = n.guaci_dual_payload() if guaci else None
+        # if payload:
+        #     self.guaci_outer.pack(fill=tk.X, pady=(6, 0))
+        #     self._fill_guaci_panels(payload)
+        # else:
+        #     self.guaci_outer.pack_forget()
 
         self._sync_scroll_region()
         self._scroll_canvas.yview_moveto(0)

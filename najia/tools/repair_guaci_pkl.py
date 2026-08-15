@@ -4,6 +4,7 @@ from __future__ import annotations
 import pickle
 import re
 import sys
+import json
 from pathlib import Path
 
 # 包内导入需在 najia 根上运行：python -m najia.tools.repair_guaci_pkl
@@ -85,6 +86,53 @@ def main() -> None:
     path.write_bytes(pickle.dumps(d, protocol=pickle.HIGHEST_PROTOCOL))
     print("OK", path, "64 gua, issues=0")
 
+def export_pkl_to_json(
+    pkl_path: str | Path, json_path: str | Path | None = None
+) -> Path:
+    """1. 将 pkl 数据转存为可直接阅读和编辑的 JSON 文件
+
+    :param pkl_path: 输入的 .pkl 文件路径
+    :param json_path: 输出的 .json 文件路径（默认同目录下同名 .json）
+    :return: 生成的 json 文件 Path 对象
+    """
+    p_pkl = Path(pkl_path)
+    p_json = Path(json_path) if json_path else p_pkl.with_suffix(".json")
+
+    # 反序列化读取 pkl
+    with open(p_pkl, "rb") as f:
+        data = pickle.load(f)
+
+    # 格式化导出为 json (indent=2 确保格式排版整齐，ensure_ascii=False 确保中文正常显示)
+    with open(p_json, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print(f"✅ 转换完成: {p_pkl.name} -> {p_json.name}")
+    return p_json
+
+
+def import_json_to_pkl(
+    json_path: str | Path, pkl_path: str | Path | None = None
+) -> Path:
+    """2. 将修改好的 JSON 文件重新打包打包回 .pkl 文件
+
+    :param json_path: 输入的 .json 文件路径
+    :param pkl_path: 输出的 .pkl 文件路径（默认同目录下同名 .pkl）
+    :return: 生成的 pkl 文件 Path 对象
+    """
+    p_json = Path(json_path)
+    p_pkl = Path(pkl_path) if pkl_path else p_json.with_suffix(".pkl")
+
+    # 读取修改后的 json
+    with open(p_json, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # 重新序列化保存为 pkl (使用最高协议)
+    with open(p_pkl, "wb") as f:
+        pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    print(f"✅ 打包完成: {p_json.name} -> {p_pkl.name}")
+    return p_pkl
 
 if __name__ == "__main__":
-    main()
+    # export_pkl_to_json("../data/guaci.pkl")
+    import_json_to_pkl("../data/guaci.json")

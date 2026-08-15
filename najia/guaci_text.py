@@ -110,51 +110,22 @@ def _dual_column(left_lines: list[str], right_lines: list[str], gutter: str) -> 
     return "\n".join(a + gutter + b for a, b in zip(ll, rr))
 
 
-def format_guaci_dual(main_name: str, bian_name: Optional[str], col_width: int = 30) -> str:
+def format_guaci_dual(main_name: str, bian_name: Optional[str]) -> str:
     """
-    本卦在左、变卦在右：先卦前并列块，再六根爻逐条并列。
-    无变卦名时只输出本卦全文（与原行为一致）。
+    顺序拼接本卦与变卦的原文内容。
     """
-    main_raw = get_guaci(main_name) or ""
-    if not main_raw.strip():
+    main_raw = (get_guaci(main_name) or "").strip()
+    if not main_raw:
         return ""
 
     if not bian_name:
-        return main_raw.strip()
+        return main_raw
 
-    bian_raw = get_guaci(bian_name) or ""
-    sm = split_guaci_sections(main_raw)
-    sb = split_guaci_sections(bian_raw)
-    gutter = "  │  "
-    YAO_LABS = ("初爻", "二爻", "三爻", "四爻", "五爻", "上爻")
+    bian_raw = (get_guaci(bian_name) or "").strip()
+    if not bian_raw:
+        return main_raw
 
-    parts: list[str] = []
-    parts.append("")
-    parts.append("【卦辞 · 彖传 · 象传】（左：本卦「" + main_name + "」　右：变卦「" + bian_name + "」）")
-    parts.append("")
-    pl = _wrap_paragraph(sm["preamble"], col_width)
-    pr = _wrap_paragraph(sb["preamble"], col_width)
-    parts.append(_dual_column(pl, pr, gutter))
-
-    parts.append("")
-    parts.append("【爻辞】（自下而上：初→上）")
-    parts.append("")
-    for i in range(6):
-        lab = YAO_LABS[i]
-        a = sm["yaos"][i].strip() or "（无）"
-        b = sb["yaos"][i].strip() or "（无）"
-        head = f"── {lab} ──"
-        parts.append(head)
-        parts.append(
-            _dual_column(
-                _wrap_paragraph(a, col_width),
-                _wrap_paragraph(b, col_width),
-                gutter,
-            )
-        )
-        parts.append("")
-
-    return "\n".join(parts).rstrip() + "\n"
+    return f"{main_raw}\n\n{bian_raw}"
 
 
 def build_guaci_dual_payload(main_name: str, bian_name: Optional[str]) -> Optional[dict]:
