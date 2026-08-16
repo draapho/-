@@ -16,10 +16,10 @@ from .meihua import meihua_from_ymdhms
 YAO_LABELS = ["初爻", "二爻", "三爻", "四爻", "五爻", "上爻"]
 
 YAO_OPTIONS = [
-    "2 少阴(静)",
     "1 少阳(静)",
-    "x 老阴(动)",
+    "2 少阴(静)",
     "o 老阳(动)",
+    "x 老阴(动)",
 ]
 
 BAGUA_MAPPING = {
@@ -33,10 +33,10 @@ BAGUA_MAPPING = {
     "8 坤地(☷)": ["2 少阴(静)", "2 少阴(静)", "2 少阴(静)"],
 }
 
+
 def _yao_from_combo(value: str) -> int:
     char = str(value).strip().split()[0].lower()
 
-    # 定义对应映射规则：2->0(少阴), 1->1(少阳), x->2(老阴/动), o->3(老阳/动)
     mapping = {
         "2": 0,
         "1": 1,
@@ -57,7 +57,6 @@ class NajiaApp(tk.Tk):
         self._build_form()
         self._build_output()
 
-        # 六爻表区域：仿终端深色
         self.hex_text.configure(
             bg="#0c1929",
             fg="#7fd7ff",
@@ -105,21 +104,6 @@ class NajiaApp(tk.Tk):
             padding=(12, 10),
         )
         row2.pack(fill=tk.X, pady=6)
-        # self._yao_hint = ttk.Label(
-        #     row2,
-        #     text=(
-        #         "时间起卦时动爻与变卦由算法自动生成；手动模式请在下方选择 0–3。"
-        #         "排盘含本卦、动爻标记、变卦列（静卦时变卦列为占位）。"
-        #         "结果区仅右侧一条竖滚动条。"
-        #     ),
-        #     justify=tk.LEFT,
-        # )
-        # self._yao_hint.pack(anchor=tk.W, fill=tk.X, pady=(0, 8))
-        # frm.bind(
-        #     "<Configure>",
-        #     lambda e: self._yao_hint.configure(wraplength=max(320, e.width - 48)),
-        #     add="+",
-        # )
 
         self.yao_boxes: list[ttk.Combobox | None] = [None] * 6
         inner = ttk.Frame(row2)
@@ -141,11 +125,25 @@ class NajiaApp(tk.Tk):
 
         left_fr = ttk.Frame(inner, padding=(0, 0, 8, 0))
         left_fr.grid(row=0, column=0, sticky=tk.NSEW)
-        ttk.Label(left_fr, text="上卦", font=("", 10, "bold")).pack(
-            anchor=tk.W, pady=(0, 6)
+        left_fr.grid_columnconfigure(1, weight=1)
+
+        ttk.Label(left_fr, text="上卦", width=5, font=("", 10, "bold")).grid(
+            row=0, column=0, sticky=tk.W, padx=(0, 8), pady=(0, 6)
         )
-        for yao_idx in (5, 4, 3):
-            _place_yao_row(left_fr, yao_idx)
+        self.upper_bagua_cb = ttk.Combobox(
+            left_fr, values=list(BAGUA_MAPPING.keys()), state="readonly"
+        )
+        self.upper_bagua_cb.grid(row=0, column=1, sticky=tk.EW, pady=(0, 6))
+        self.upper_bagua_cb.bind("<<ComboboxSelected>>", self._on_upper_bagua_selected)
+
+        for r_idx, yao_idx in enumerate((5, 4, 3), start=1):
+            ttk.Label(left_fr, text=YAO_LABELS[yao_idx], width=5).grid(
+                row=r_idx, column=0, sticky=tk.W, padx=(0, 8), pady=5
+            )
+            cb = ttk.Combobox(left_fr, values=YAO_OPTIONS, state="readonly")
+            cb.set(YAO_OPTIONS[0])
+            cb.grid(row=r_idx, column=1, sticky=tk.EW, pady=5)
+            self.yao_boxes[yao_idx] = cb
 
         ttk.Separator(inner, orient=tk.VERTICAL).grid(
             row=0, column=1, sticky=tk.NS, padx=6
@@ -153,11 +151,31 @@ class NajiaApp(tk.Tk):
 
         right_fr = ttk.Frame(inner, padding=(8, 0, 0, 0))
         right_fr.grid(row=0, column=2, sticky=tk.NSEW)
-        ttk.Label(right_fr, text="下卦", font=("", 10, "bold")).pack(
-            anchor=tk.W, pady=(0, 6)
+        right_fr.grid_columnconfigure(1, weight=1)
+
+        ttk.Label(right_fr, text="下卦", width=5, font=("", 10, "bold")).grid(
+            row=0, column=0, sticky=tk.W, padx=(0, 8), pady=(0, 6)
         )
-        for yao_idx in (2, 1, 0):
-            _place_yao_row(right_fr, yao_idx)
+        self.lower_bagua_cb = ttk.Combobox(
+            right_fr, values=list(BAGUA_MAPPING.keys()), state="readonly"
+        )
+        self.lower_bagua_cb.grid(row=0, column=1, sticky=tk.EW, pady=(0, 6))
+        self.lower_bagua_cb.bind("<<ComboboxSelected>>", self._on_lower_bagua_selected)
+
+        for r_idx, yao_idx in enumerate((2, 1, 0), start=1):
+            ttk.Label(right_fr, text=YAO_LABELS[yao_idx], width=5).grid(
+                row=r_idx, column=0, sticky=tk.W, padx=(0, 8), pady=5
+            )
+            cb = ttk.Combobox(right_fr, values=YAO_OPTIONS, state="readonly")
+            cb.set(YAO_OPTIONS[0])
+            cb.grid(row=r_idx, column=1, sticky=tk.EW, pady=5)
+            self.yao_boxes[yao_idx] = cb
+        # 设置默认值为 "1 乾天(☰)" 并自动同步至各爻
+        default_bagua = "1 乾天(☰)"
+        self.upper_bagua_cb.set(default_bagua)
+        self._on_upper_bagua_selected()
+        self.lower_bagua_cb.set(default_bagua)
+        self._on_lower_bagua_selected()
 
         self._sync_mode_widgets()
 
@@ -178,9 +196,6 @@ class NajiaApp(tk.Tk):
             state="readonly",
         )
         gender_cb.pack(side=tk.LEFT, padx=6)
-        # ttk.Entry(row3, textvariable=self.gender_var, width=8).pack(
-        #     side=tk.LEFT, padx=6
-        # )
         self.guaci_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(row3, text="显示卦辞", variable=self.guaci_var).pack(
             side=tk.LEFT, padx=8
@@ -200,7 +215,6 @@ class NajiaApp(tk.Tk):
         self._output_wrap.grid_columnconfigure(0, weight=1)
         self._output_wrap.grid_rowconfigure(0, weight=1)
 
-        # 单一右侧纵轴滚动：Canvas + 内层 Frame（六爻 + 卦辞同卷）
         self._scroll_canvas = tk.Canvas(
             self._output_wrap,
             highlightthickness=0,
@@ -242,13 +256,12 @@ class NajiaApp(tk.Tk):
         self.hex_text.pack(fill=tk.X)
         self.hex_text.configure(font=self._mono_font)
 
-        # 卦辞爻辞：左右分栏 + 不同底色（仅勾选「显示卦辞」时出现）
         self.guaci_outer = ttk.Frame(self._scroll_inner)
         self.guaci_outer.pack(fill=tk.X, pady=(6, 0))
         self.guaci_outer.pack_forget()
         gh = ttk.Label(
             self.guaci_outer,
-            text="卦辞 · 彖传 · 象传 · 爻辞（左：本卦　右：变卦）",
+            text="卦辞 · 彖传 · 象传 · 爻辞（左：本卦 右：变卦）",
         )
         gh.pack(anchor=tk.W, pady=(0, 4))
         self.guaci_body = ttk.Frame(self.guaci_outer)
@@ -312,6 +325,22 @@ class NajiaApp(tk.Tk):
             self._scroll_inner, self._on_output_mousewheel
         )
 
+    def _on_upper_bagua_selected(self, event=None) -> None:
+        bagua = self.upper_bagua_cb.get()
+        if bagua in BAGUA_MAPPING:
+            yaos = BAGUA_MAPPING[bagua]
+            self.yao_boxes[5].set(yaos[0])
+            self.yao_boxes[4].set(yaos[1])
+            self.yao_boxes[3].set(yaos[2])
+
+    def _on_lower_bagua_selected(self, event=None) -> None:
+        bagua = self.lower_bagua_cb.get()
+        if bagua in BAGUA_MAPPING:
+            yaos = BAGUA_MAPPING[bagua]
+            self.yao_boxes[2].set(yaos[0])
+            self.yao_boxes[1].set(yaos[1])
+            self.yao_boxes[0].set(yaos[2])
+
     def _on_output_mousewheel(self, event: tk.Event) -> str:
         d = 0
         if getattr(event, "delta", 0):
@@ -331,7 +360,6 @@ class NajiaApp(tk.Tk):
             self._bind_output_mousewheel_recursively(ch, handler)
 
     def _sync_scroll_region(self) -> None:
-        """Text 按行数撑开高度，由外层 Canvas 统一滚动。"""
         self.update_idletasks()
         try:
             n = int(self.hex_text.index("end-1c").split(".")[0])
@@ -403,8 +431,12 @@ class NajiaApp(tk.Tk):
 
     def _sync_mode_widgets(self) -> None:
         manual = self.mode_var.get() == "manual"
+        state = "readonly" if manual else "disabled"
         for cb in self.yao_boxes:
-            cb.configure(state="readonly" if manual else "disabled")
+            cb.configure(state=state)
+        if hasattr(self, "upper_bagua_cb"):
+            self.upper_bagua_cb.configure(state=state)
+            self.lower_bagua_cb.configure(state=state)
 
     def _collect_params(self) -> list[int]:
         return [_yao_from_combo(cb.get()) for cb in self.yao_boxes]
@@ -446,7 +478,6 @@ class NajiaApp(tk.Tk):
         gender = self.gender_var.get().strip()
         guaci = bool(self.guaci_var.get())
 
-        # try: # BUG
         n = Najia().compile(
             params=params,
             gender=gender or None,
@@ -454,22 +485,10 @@ class NajiaApp(tk.Tk):
             title=title or None,
             guaci=guaci,
         )
-        text = n.render() # embed_guaci_plain=not guaci
-
-        # except Exception as ex:
-        #     messagebox.showerror("排盘失败", str(ex))
-        #     return
+        text = n.render()
 
         self.hex_text.delete("1.0", tk.END)
         self.hex_text.insert(tk.END, text.rstrip() + "\n")
-
-        # [] 取消了独立窗口显示卦辞爻辞功能
-        # payload = n.guaci_dual_payload() if guaci else None
-        # if payload:
-        #     self.guaci_outer.pack(fill=tk.X, pady=(6, 0))
-        #     self._fill_guaci_panels(payload)
-        # else:
-        #     self.guaci_outer.pack_forget()
 
         self._sync_scroll_region()
         self._scroll_canvas.yview_moveto(0)
