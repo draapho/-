@@ -308,7 +308,8 @@ def get_xing5_relationship(a: str, b: str, format="b") -> str:
         b: 客体五行, 限 "木火土金水"
         d: 动化关系, 需要地支和五行
     Returns:
-        中文关系字符串: "比和"/"生"/"克"/"被生"/"被克"
+        中文关系字符串: "比"/"生"/"克"/"耗"/"泄"
+        中文关系字符串: "旺"/"相"/"死"/"囚"/"休"
     Raises:
         ValueError: 输入非合法五行字符时抛出
     """
@@ -316,7 +317,7 @@ def get_xing5_relationship(a: str, b: str, format="b") -> str:
     _INDEX_MAP = {name: idx for idx, name in enumerate(_XING5_STANDARD)}
     _RELATION_MAP_A_SHENKE = {0: "比", 1: "生", 2: "克", 3: "耗", 4: "泄"}      # 对应于{A同B, A生B, A克B, A耗B(B克A), A泄B(B生A)}
     _RELATION_MAP_B_WANGSHUAI = {0: "旺", 1: "相", 2: "死", 3: "囚", 4: "休"}   # 对应于{A同B, A生B, A克B, A耗B(B克A), A泄B(B生A)}
-    _RELATION_MAP_D_DONGHUA = {0: "比和", 1: "化泄", 2: "化耗", 3: "化克", 4: "化生"}
+    _RELATION_MAP_D_DONGHUA = {0: "比和", 1: "生泄", 2: "克耗", 3: "回克", 4: "回生"}
 
     xing1 = _extract_xing5(a);
     xing2 = _extract_xing5(b);
@@ -357,7 +358,7 @@ def get_chonghe_relation(d1: str, d2: str) -> str:
         d1: 第一个地支
         d2: 第二个地支
     Returns:
-        "六冲" / "六合" / None
+        "子午冲" / "子丑合" / ""
     """
 
     zhi1 = _extract_zhi(d1)
@@ -365,22 +366,26 @@ def get_chonghe_relation(d1: str, d2: str) -> str:
     if not zhi1 or not zhi2:
         return ""
 
-    key = frozenset((zhi1, zhi2))
-    return (
-        const.CHONG6.get(key)
-        or const.HE6.get(key)
-        or ""
-    )
+    # 按十二地支标准顺位对传入的两个地支排序，确保顺序一致
+    sorted_zhi = sorted([zhi1, zhi2], key=lambda x: const.ZHI_ORDER.index(x) if x in const.ZHI_ORDER else 99)
+    key = tuple(sorted_zhi)
 
-def get_xinghai_relation(d1: str, d2: str, format = "all") -> str:
+    if key in const.CHONG6:
+        return f"{key[0]}{key[1]}冲"
+    if key in const.HE6:
+        return f"{key[0]}{key[1]}合"
+
+    return ""
+
+
+def get_haipo_relation(d1: str, d2: str) -> str:
     """
-    判断两个地支的六冲/六合关系
+    判断两个地支的六害/六破关系
     Args:
         d1: 第一个地支
         d2: 第二个地支
-        format: "all" 全部, "nozi" 去掉自刑
     Returns:
-        "六害" / "无礼刑" / "自刑" / None
+        "六害" / "六破"
     """
 
     zhi1 = _extract_zhi(d1)
@@ -388,15 +393,10 @@ def get_xinghai_relation(d1: str, d2: str, format = "all") -> str:
     if not zhi1 or not zhi2:
         return ""
 
-    if zhi1 == zhi2 and format.lower() != "nozi":
-        if zhi1 in const.XING3["one"]:
-            return "自刑"
-        return ""
-
     key = frozenset((zhi1, zhi2))
     return (
-        const.XING3["two"].get(key)
-        # or const.HAI6.get(key)        # [] 取消害的判断
+        const.HAI6.get(key)
+        or const.PO6.get(key)
         or ""
     )
 
@@ -437,89 +437,139 @@ def get_muku(d1: str, muku: str) -> str:
 
     return ""
 
-def get_he3(force: List[str], option: List[str]) -> List[str]:
+def get_he3(yao_force: List[List[str]], yao_option: List[str], riyue: List[str] = []) -> List[str]:
     """
-    三合局与半合局判定函数, 半合局必须由force构成
+    基于新的 yao_force 结构判定三合局与半合局
 
-    :param force: 必须存在的地支 (日, 月, 变/动)
-    :param option: 可以不存在的地支 (静爻)
+    :param yao_force: 强力量爻结构, 如 [['申', '子'], ['辰', ''], ['寅', '午']]
+    :param yao_option: 静爻/伏神地支
+    :param riyue: 日建、月建地支 (可选, 如 ['申', '酉'])
     :return: 如 ['水合: 申子辰', '水合: 申子辰缺子']
     """
 
-    # 提取并过滤有效地支
-    force_set = set(filter(None, [_extract_zhi(b) for b in force]))
-    option_set = set(filter(None, [_extract_zhi(b) for b in option]))
-    all_set = force_set.union(option_set)
+    # 提取地支
+    riyue_dz = [_extract_zhi(b) for b in riyue if _extract_zhi(b)]
+    option_dz = [_extract_zhi(b) for b in yao_option if _extract_zhi(b)]
+    force_dz = [
+        [_extract_zhi(row[0]), _extract_zhi(row[1]) if len(row) > 1 else '']
+        for row in yao_force if row
+    ]
 
+    riyue_set = set(filter(None, [b for b in riyue_dz]))
+    option_set = set(filter(None, [b for b in option_dz]))
+    pair_set = [{p[0], p[1]} for p in force_dz if p[0] and p[1]]    # 同组动变, set
+    dong_set = {pair[0] for pair in force_dz if pair[0]}            # 动爻暗动, set
+    rydong_set = riyue_set | dong_set
+    all_set = {dz for pair in force_dz for dz in pair if dz} | option_set | riyue_set # 全部set
     results = []
 
+    # 遍历每一个三合局（水、木、火、金）
     for combo_set, name in const.HE3.items():
-        # 第一组必须有地支参与，否则不具备主导作用，直接跳过
-        force_present = combo_set.intersection(force_set)
-        if not force_present:
+        # 各维度命中交集分析
+        pair_matched = any(len(p.intersection(combo_set)) == 2 for p in pair_set)  # 同组动变成二合
+        dong_match = combo_set.intersection(dong_set)                              # 动暗动 命中数
+        rydong_match = combo_set.intersection(rydong_set)                          # 日月动 命中数
+
+        c1 = (len(rydong_match) == 3)   # 一动爻 + 日月成弱三合
+        c2 = (len(dong_match) >= 2)     # 至少半合
+        c3 = pair_matched               # 至少半合
+        if not (c1 or c2 or c3):        # 三者皆不满足，直接跳过
             continue
 
-        all_present = combo_set.intersection(all_set)
-
-        # 获取当前三合局的标准顺序字符串 (例如 "申子辰")
+        # 结果生成
         standard_order = const.HE3_ORDER_MAP.get(name, [])
         standard_str = "".join(standard_order)
-
-        # 1. 完整三合局
+        # 全部地支
+        all_present = combo_set.intersection(all_set)
         if len(all_present) == 3:
-            results.append(f"{name}: {standard_str}")
-
-        # 2. 半合局：日月动凑齐 2 个地支, 才比较有价值.
-        elif len(force_present) == 2:
-            missing_set = combo_set - force_present
-            if missing_set:
-                missing = list(missing_set)[0]
-                results.append(f"{name}: {standard_str}缺{missing}")
+            results.append(f"{standard_str}·{name}")
+        elif len(all_present) == 2:
+            missing = list(combo_set - all_present)[0]
+            results.append(f"{standard_str}缺{missing}·{name}")
 
     return results
 
-def get_xing3(force: List[str], option: List[str]) -> List[str]:
+def get_zixin_relation(d1: str, d2: str) -> str:
     """
-    三刑与半刑判定函数
+    判断两个地支的自刑
+    Args:
+        d1: 第一个地支
+        d2: 第二个地支
+    Returns:
+        "自刑"
+    """
 
-    :param force: 必须存在的地支 (日, 月, 动)
-    :param option: 可以不存在的地支 (静爻)
+    zhi1 = _extract_zhi(d1)
+    zhi2 = _extract_zhi(d2)
+    if not zhi1 or not zhi2:
+        return ""
+
+    if zhi1 == zhi2:
+        if zhi1 in const.XING3["one"]:
+            return f"{zhi1}{zhi1}自刑"
+    return ""
+
+def get_xing3(yao_force: List[List[str]], yao_option: List[str], riyue: List[str] = []) -> List[str]:
+    """
+    基于新的 yao_force 结构判定三刑
+
+    :param yao_force: 强力量爻结构, 如 [['申', '子'], ['辰', ''], ['寅', '午']]
+    :param yao_option: 静爻/伏神地支
+    :param riyue: 日建、月建地支 (可选, 如 ['申', '酉'])
     :return: 如 ['无恩: 寅巳申']
     """
-    # 严格限定三刑地支的标准顺序
-    ORDER_MAP = {
-        "无恩": ["寅", "巳", "申"],
-        "恃势": ["丑", "戌", "未"],
-    }
 
-    # 提取并过滤有效地支
-    force_set = set(filter(None, [_extract_zhi(b) for b in force]))
-    option_set = set(filter(None, [_extract_zhi(b) for b in option]))
-    all_set = force_set.union(option_set)
+    # 提取地支
+    riyue_dz = [_extract_zhi(b) for b in riyue if _extract_zhi(b)]
+    option_dz = [_extract_zhi(b) for b in yao_option if _extract_zhi(b)]
+    force_dz = [
+        [_extract_zhi(row[0]), _extract_zhi(row[1]) if len(row) > 1 else '']
+        for row in yao_force if row
+    ]
 
+    riyue_set = set(filter(None, [b for b in riyue_dz]))
+    option_set = set(filter(None, [b for b in option_dz]))
+    pair_set = [{p[0], p[1]} for p in force_dz if p[0] and p[1]]    # 同组动变, set
+    dong_set = {pair[0] for pair in force_dz if pair[0]}            # 动爻暗动, set
+    rydong_set = riyue_set | dong_set
+    all_set = {dz for pair in force_dz for dz in pair if dz} | option_set | riyue_set # 全部set
     results = []
 
-    for name, order_list in ORDER_MAP.items():
-        combo_set = set(order_list)
-        # 必须有二个强制地支参与，否则不具备主导作用，直接跳过
-        force_present = combo_set.intersection(force_set)
-        if not force_present: # 日, 月, 动
+    for combo_set, name in const.XING3["three"].items():
+        pair_matched = any(len(p.intersection(combo_set)) == 2 for p in pair_set)
+        dong_match = combo_set.intersection(dong_set)
+        rydong_match = combo_set.intersection(rydong_set)
+
+        c1 = (len(rydong_match) == 3)   # 一动爻 + 日月凑齐 3 字
+        c2 = (len(dong_match) >= 2)     # 动爻/暗动占 2 字
+        c3 = pair_matched               # 同组动变成二刑
+
+        if not (c1 or c2 or c3):
             continue
 
-        all_present = combo_set.intersection(all_set)
+        standard_order = const.XING3_ORDER_MAP.get(name, [])
+        standard_str = "".join(standard_order)
+        all_match = combo_set.intersection(all_set)
+        if len(all_match) == 3:
+            results.append(f"{standard_str}·{name}")
 
-        # 获取当前三刑的标准顺序字符串 (例如 "寅巳申")
-        standard_str = "".join(order_list)
+    # 无礼刑: 子卯, 允许动爻, 与它位变爻成刑, 可与静爻成刑.
+    for combo_set, name in const.XING3["two"].items():
+        dong_match = combo_set.intersection(dong_set)
+        all_match = combo_set.intersection(all_set)
 
-        # 1. 完整三刑: 全局凑齐 3 个地支
-        if len(all_present) == 3:
-            results.append(f"{name}: {standard_str}")
+        if len(all_match) == 2 and (len(dong_match) >= 1):
+            standard_order = const.XING3_ORDER_MAP.get(name, [])
+            standard_str = "".join(standard_order)
+            results.append(f"{standard_str}·{name}")
 
-        # 2. 半刑: 基本不论.
-        # elif len(force_present) == 2:
-        #     missing_set = (combo_set - force_present)
-        #     missing = list(missing_set)[0]
-        #     results.append(f"{name}: {standard_str}缺{missing}")
+    # 3. 自刑（仅针对同组动爻与变爻）
+    for p in force_dz:
+        # 要求动爻与变爻均存在、地支相同、且在自刑地支集合中
+        if p[0] and p[1] and p[0] == p[1] and p[0] in const.XING3["one"]:
+            res_str = f"{p[0]}{p[1]}·自刑"
+            if res_str not in results:
+                results.append(res_str)
 
     return results
 
@@ -528,32 +578,38 @@ def get_mark3(d1: str, desche3: List[str], descxing3: List[str], yao_exlude = ""
     通过字符串频次直接判断地支是否存在于合局或刑局中.
 
     :param target_zhi: 目标地支 (如 '申', '辰')
-    :param desche3: 三合列表 (如 ['水合: 申子辰缺辰'])
+    :param desche3: 三合列表 (如 ['申子辰缺辰 水合'])
     :param descxing3: 三刑列表
-    :param yao_exlude: 强制地支列表/集合，用于排除重复提示
-    :param is_option: 当前输入的 d1 是否属于可选地支 (如静爻/伏神)
-    :return: "双㊂", "合㊂", "刑㊂", 或 ""
+    :param yao_exlude: 强制地支列表/集合，用于排除静爻等的重复提示
+    :param is_option: 当前输入的 d1 是否属于可选地支 (如静爻)
+    :return: "刑合㊂", "合㊀", "刑㊁", 或 ""
     """
     target_zhi = _extract_zhi(d1)
     if not target_zhi:
         return ""
 
-    if yao_exlude and is_option:
+    is_zixing = False
+    if is_option and yao_exlude:
         exlude_set = set(filter(None, [_extract_zhi(b) for b in yao_exlude]))
         if target_zhi in exlude_set:
-            return ""
+            # 检查 descxing3 中是否存在包含当前 target_zhi 的自刑描述
+            is_zixing = any("自刑" in desc and target_zhi in desc for desc in descxing3)
+            if not is_zixing:   # 若不属于自刑情况, 则执行排除; 若属于自刑, 则绕过排除继续标记
+                return ""
 
     # 在描述字符串中，如果地支存在且未缺失，它只会出现 1 次
-    # 如果地支缺失 (如 '申子辰缺辰')，它会出现在标准名和缺字后，共出现 2 次
-    matched_he = any(desc.count(target_zhi) == 1 for desc in desche3)
-    matched_xing = any(desc.count(target_zhi) == 1 for desc in descxing3)
+    # 如果地支缺失 (如 '申子辰缺辰')，它会出现在标准名和缺字后，则不算在内
+    matched_he = False
+    if not is_zixing: # 避免 is_zixing 时, 也判断显示㊀
+        matched_he = any(target_zhi in desc and f"缺{target_zhi}" not in desc for desc in desche3)
+    matched_xing = any(target_zhi in desc and f"缺{target_zhi}" not in desc for desc in descxing3)
 
     if matched_he and matched_xing:
-        return "双㊂"
+        return "刑合㊂"
     elif matched_he:
-        return "合㊂"
+        return "合㊀"
     elif matched_xing:
-        return "刑㊂"
+        return "刑㊁"
 
     return ""
 

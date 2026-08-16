@@ -26,7 +26,6 @@ from .utils import get_zhi5
 from .utils import get_type
 from .utils import get_xing5_relationship
 from .utils import get_chonghe_relation
-from .utils import get_xinghai_relation
 from .utils import get_xunkong
 from .utils import get_muku
 from .utils import get_xing3
@@ -117,6 +116,8 @@ def _align_hexagram_table(rows: dict) -> None:
     FIXED_QINX_WIDTH = 8
     rows["yaom"] = _pad_column(rows["yaom"], FIXED_QINX_WIDTH)
     rows["yaod"] = _pad_column(rows["yaod"], FIXED_QINX_WIDTH)
+    rows["hide"]["yaom"] = _pad_column(rows["hide"]["yaom"], FIXED_QINX_WIDTH)
+    rows["hide"]["yaod"] = _pad_column(rows["hide"]["yaod"], FIXED_QINX_WIDTH)
 
     mark_floor = _mark_column_min_width()
     w = max(_column_width(rows["main"]["mark"]), mark_floor)
@@ -124,6 +125,9 @@ def _align_hexagram_table(rows: dict) -> None:
 
     w = _column_width(rows["shiy"])
     rows["shiy"] = _pad_column(rows["shiy"], w)
+
+    w = _column_width(rows["chohe"])
+    rows["chohe"] = _pad_column(rows["chohe"], w)
 
     w = _column_width(rows["dyao"])
     rows["dyao"] = _pad_column(rows["dyao"], w)
@@ -464,10 +468,6 @@ class Najia(object):
         # god6 = God6(''.join([GANS[lunar['day'].tg], ZHIS[lunar['day'].dz]]))
         god6 = get_god6(lunar["gz"]["day"])
 
-        # 动爻位置
-        dong = [i for i, x in enumerate(params) if x > 1]
-        # logger.debug(dong)
-
         # 伏神
         hide = self._hidden(gong, qin6)
 
@@ -477,79 +477,87 @@ class Najia(object):
         # 五行, 相旺休囚死
         gz5_m = lunar["gz5"]["month"]
         gz5_d = lunar["gz5"]["day"]
+
         yao_month = [[get_xing5_relationship(gz5_m, qinx[i])] for i in range(6)]
-        yao_month.extend(
-            [[get_xing5_relationship(gz5_m, hide["qinx"][i] if hide["qinx"][i] else "")] for i in range(6)])
         yao_day = [[get_xing5_relationship(gz5_d, qinx[i])] for i in range(6)]
-        yao_day.extend([[get_xing5_relationship(gz5_d, hide["qinx"][i] if hide["qinx"][i] else "")] for i in range(6)])
+        hide["yaom"] = [[get_xing5_relationship(gz5_m, hide["qinx"][i] if hide["qinx"][i] else "")] for i in range(6)]
+        hide["yaod"] = [[get_xing5_relationship(gz5_d, hide["qinx"][i] if hide["qinx"][i] else "")] for i in range(6)]
+        hide["fei"] = [[get_xing5_relationship(qinx[i], hide["qinx"][i])] for i in range(6)]   # 飞神 -> 伏神
 
         if bian:
             bian["yaom"] = [[get_xing5_relationship(gz5_m, bian["qinx"][i])] for i in range(6)]
             bian["yaod"] = [[get_xing5_relationship(gz5_d, bian["qinx"][i])] for i in range(6)]
-            bian["dong"] = [[get_xing5_relationship(qinx[i], bian["qinx"][i], format= 'd')] for i in range(6)]
+            bian["dong"] = [[get_xing5_relationship(qinx[i], bian["qinx"][i], format= 'd')] for i in range(6)]  # 动爻 -> 变爻. 比和会进一步判断地支进, 退, 伏
 
         # 冲合分析
         for i in range(6):
             yao_month[i].append(get_chonghe_relation(gz5_m, qinx[i]))
             yao_day[i].append(get_chonghe_relation(gz5_d, qinx[i]))
+            hide["yaom"][i].append(get_chonghe_relation(gz5_m, hide["qinx"][i]))
+            hide["yaod"][i].append(get_chonghe_relation(gz5_d, hide["qinx"][i]))
+            hide["fei"][i].append(get_chonghe_relation(qinx[i], hide["qinx"][i]))   # 飞神 -> 伏神
+
             if bian:
                 bian["yaom"][i].append(get_chonghe_relation(gz5_m, bian["qinx"][i]))
                 bian["yaod"][i].append(get_chonghe_relation(gz5_d, bian["qinx"][i]))
                 bian["dong"][i].append(get_chonghe_relation(qinx[i], bian["qinx"][i]))
-        for i in range(6):
-            yao_month[i + 6].append(get_chonghe_relation(gz5_m, hide["qinx"][i]))
-            yao_day[i + 6].append(get_chonghe_relation(gz5_d, hide["qinx"][i]))
+
+        # 提取干支, 动爻位置, 暗动位置等
+        dong = [i for i, x in enumerate(params) if x > 1]       # 动爻位置
+        dong_yao = [qinx[i] for i in dong]                      # 动爻干支
+        andong = [i for i in range(6) if i not in dong and "六冲" in yao_day[i]]    # 暗动位置, 静爻+日冲, 不判断相旺生伏情况.
+        an_dongy = [qinx[i] for i in andong]                    # 暗动干支
+        jing_yao = [qinx[i] for i in range(6) if i not in dong + andong]            # 静爻干支
+        bian_yao = [bian["qinx"][i] for i in dong]              # 变爻干支
+        hide_yao = [x for x in hide["qinx"] if x]               # 伏神干支
+
+        # 本卦中, 动爻(不含暗动)对各爻的冲合状态, 不包括变爻和伏神.
+        yao_chohe = [set() for _ in range(6)]
+        for d in dong:
+            for i in range(6):
+                if d != i:  # 排除自身
+                    ch = get_chonghe_relation(qinx[d], qinx[i])
+                    if ch:
+                        yao_chohe[d].add(ch)
+                        yao_chohe[i].add(ch)
+        # yao_chohe = [list(s) for s in yao_chohe]
 
         # 旬空. 仅日辰考虑.
         for i in range(6):
             yao_day[i].append(get_xunkong(lunar["xkong"], qinx[i]))
+            hide["yaod"][i].append(get_xunkong(lunar["xkong"], hide["qinx"][i]))
             if bian:
                 bian["yaod"][i].append(get_xunkong(lunar["xkong"], bian["qinx"][i]))
-        for i in range(6):
-            yao_day[i + 6].append(get_xunkong(lunar["xkong"], hide["qinx"][i]))
 
         # 墓库
         for i in range(6):
             yao_month[i].append(get_muku(gz5_m, qinx[i]))
             yao_day[i].append(get_muku(gz5_d, qinx[i]))
+            hide["yaom"][i].append(get_muku(gz5_m, hide["qinx"][i]))
+            hide["yaod"][i].append(get_muku(gz5_d, hide["qinx"][i]))
+
             if bian:
                 bian["yaom"][i].append(get_muku(bian["qinx"][i], gz5_m))
                 bian["yaod"][i].append(get_muku(bian["qinx"][i], gz5_d))
                 bian["dong"][i].append(get_muku(qinx[i], bian["qinx"][i])) # 动爻入变爻墓库.
-        for i in range(6):
-            yao_month[i + 6].append(get_muku(gz5_m, hide["qinx"][i]))
-            yao_day[i + 6].append(get_muku(gz5_d, hide["qinx"][i]))
 
-        # 子卯刑, 自刑, 害  # get_xinghai_relation 取消了害的判断, 六爻中害基本不用.
-        for i in range(6):
-            yao_month[i].append(get_xinghai_relation(gz5_m, qinx[i]))
-            yao_day[i].append(get_xinghai_relation(gz5_d, qinx[i]))
-            if bian:
-                bian["yaom"][i].append(get_xinghai_relation(gz5_m, bian["qinx"][i]))
-                bian["yaod"][i].append(get_xinghai_relation(gz5_d, bian["qinx"][i]))
-                bian["dong"][i].append(get_xinghai_relation(qinx[i], bian["qinx"][i], format = "nozi"))
-        # for i in range(6):  # [] 伏神不计入刑, 害, 三合, 三刑判断
-        #     yao_month[i + 6].append(get_xinghai_relation(gz5_m, hide["qinx"][i]))
-        #     yao_day[i + 6].append(get_xinghai_relation(gz5_d, hide["qinx"][i]))
-
-        # 三刑, 三合.
-        dong_yao = [qinx[i] for i in dong] # 提取动爻干支
-        bian_yao = [bian["qinx"][i] for i in dong]  # 提取变爻干支  # bug: 考虑增加暗动的判断
-        jing_yao = [qinx[i] for i in range(6) if i not in dong] # 提取静止爻干支
-        # hide_yao = [x for x in hide["qinx"] if x]   # 伏神
-
-        yao_force = [gz5_m, gz5_d] + dong_yao # 日, 月, 动.
-        yao_option = jing_yao + bian_yao # + hide_yao 伏神不计入三合, 三刑判断
-        desche3 = get_he3(yao_force, yao_option)
-        descxing3 = get_xing3(yao_force, yao_option)
+        # 三合, 三刑
+        # 判断三和, 三刑的特殊结构. [["动", "变"], ["暗动", ""]]
+        biando_pairs = [[d, b] for d, b in zip(dong_yao, bian_yao) if d]
+        andong_pairs = [[a, ''] for a in an_dongy if a]
+        yao_force = biando_pairs + andong_pairs
+        yao_option = jing_yao                                           # [] + hide_yao 伏神不参与三合, 三刑.
+        desche3 = get_he3(yao_force, yao_option, [gz5_m, gz5_d])        # [] 三合, 目前允许一动+日月成三合.
+        descxing3 = get_xing3(yao_force, yao_option, [gz5_m, gz5_d])     # [] 三刑, 目前允许一动+日月成三合.
 
         # 增加三刑, 三合相关爻的提示.
         for i in range(6):
-            yao_month[i].append(get_mark3(qinx[i], desche3, descxing3, yao_force, i not in dong))   # 标记静爻
+            yao_exclude = dong_yao + an_dongy + bian_yao + [gz5_m, gz5_d]
+            yao_month[i].append(get_mark3(qinx[i], desche3, descxing3, yao_exclude, i not in dong and i not in andong)) # 标记静爻
+            # hide["yaom"][i].append(get_mark3(hide["qinx"][i], desche3, descxing3, yao_exclude, True))   # 标记伏神
             if bian:
-                bian["yaom"][i].append(get_mark3(bian["qinx"][i], desche3, descxing3, yao_force, True))   # 标记变爻
-        # for i in range(6):
-        #     yao_month[i + 6].append(get_mark3(hide["qinx"][i], desche3, descxing3, yao_force, True))    # 标记伏神
+                yao_exclude = dong_yao + an_dongy
+                bian["yaom"][i].append(get_mark3(bian["qinx"][i], desche3, descxing3, yao_exclude, True))     # 标记变爻
         lunar["gz5"]["year"] += "年"
         lunar["gz5"]["month"] += "月" + (get_mark3(gz5_m, desche3, descxing3)[-1:] or "　")
         lunar["gz5"]["day"] += "日" + (get_mark3(gz5_d, desche3, descxing3)[-1:] or "　")
@@ -563,7 +571,7 @@ class Najia(object):
             "solar": solar,     # 阳历
             "lunar": lunar,     # 阴历
             "god6": god6,       # 六神
-            "dong": dong,       # 动爻
+            "andong": andong,   # 可能的暗动.
             "name": name,       # 卦名
             "extra": extra,     # 其它信息, 游魂, 归魂, 六冲, 六合.
             "mark": mark,       # 阴阳
@@ -575,7 +583,8 @@ class Najia(object):
             "hide": hide,       # 伏爻
             "yaom": yao_month,  # 各爻基于月的分析
             "yaod": yao_day,    # 各爻基于日的分析
-            "desche3": desche3, # 三合描述
+            "yaochohe": yao_chohe,  # 各爻基于动爻的分析
+            "desche3": desche3,     # 三合描述
             "descxing3": descxing3, # 三刑描述
         }
 
@@ -607,7 +616,13 @@ class Najia(object):
         rows = self.data
 
         symbal = SYMBOL
-        rows["dyao"] = [symbal[x] if x in (2, 3) else "" for x in self.data["params"]]
+        # rows["dyao"] = [symbal[x] if x in (2, 3) else "" for x in self.data["params"]]
+        rows["dyao"] = [
+            symbal[x] if x in (2, 3)
+            else '△' if i in rows["andong"]       # 加上可能的暗动的提示.
+            else ""
+            for i, x in enumerate(self.data["params"])
+        ]
 
         rows["main"] = {}
         rows["main"]["mark"] = [symbal[int(x)] for x in self.data["mark"]]
@@ -646,18 +661,43 @@ class Najia(object):
                 shiy.append("　")
         rows["shiy"] = shiy
 
-        for i in range(12):
+        # 动爻对本卦各爻的冲合关系
+        rows["chohe"] = []
+        for s in rows["yaochohe"]:  # s 为单个爻的 set 集合，如 {"子午冲", "卯戌合"}
+            has_chong = any("冲" in item for item in s)
+            has_he = any("合" in item for item in s)
+            if has_chong and has_he:
+                rows["chohe"].append("六")
+            elif has_chong:
+                rows["chohe"].append("冲")
+            elif has_he:
+                rows["chohe"].append("合")
+            else:
+                rows["chohe"].append("　")
+
+        # all_chohe_set = set().union(*[set(x) for x in rows["yaochohe"]])
+        # rows["descchohe"] = "　".join([i for i in sorted(all_chohe_set) if i and i.strip()])  # 冲合提示.
+
+        # 字符串简化处理,
+        for i in range(6):
             rows["yaom"][i] = "".join(item.strip()[-1] for item in rows["yaom"][i] if item and item.strip())
+            if ('㊂' in rows["yaom"][i]) and len(rows["yaom"][i]) < 4:  # 三合, 三刑的注释判断
+                rows["yaom"][i] = rows["yaom"][i].replace('㊂', '㊀㊁') 
             rows["yaod"][i] = "".join(item.strip()[-1] for item in rows["yaod"][i] if item and item.strip())
+            rows["hide"]["yaom"][i] = "".join(item.strip()[-1] for item in rows["hide"]["yaom"][i] if item and item.strip())
+            rows["hide"]["yaod"][i] = "".join(item.strip()[-1] for item in rows["hide"]["yaod"][i] if item and item.strip())
+            rows["hide"]["fei"][i] = "".join(item.strip()[-1] for item in rows["hide"]["fei"][i] if item and item.strip())
 
         if rows.get("bian"):
             for i in range(6):
                 rows["bian"]["yaom"][i] = "".join(item.strip()[-1] for item in rows["bian"]["yaom"][i] if item and item.strip())
+                if ('㊂' in rows["bian"]["yaom"][i]) and len(rows["bian"]["yaom"][i]) < 4:  # 三合, 三刑的注释判断
+                    rows["bian"]["yaom"][i] = rows["bian"]["yaom"][i].replace('㊂', '㊀㊁')
                 rows["bian"]["yaod"][i] = "".join(item.strip()[-1] for item in rows["bian"]["yaod"][i] if item and item.strip())
                 rows["bian"]["dong"][i] = "".join(item.strip()[-1] for item in rows["bian"]["dong"][i] if item and item.strip())
 
-        combined_list = rows["desche3"] + rows["descxing3"]
-        rows["desc"] = "　".join([i for i in combined_list if i and i.strip()]) # 三合, 三刑提示.
+        rows["desche3"] = "　".join([i for i in rows["desche3"] if i and i.strip()])        # 三合提示.
+        rows["descxing3"] = "　".join([i for i in rows["descxing3"] if i and i.strip()])    # 三刑提示.
 
         _align_hexagram_table(rows)     # 统一字符串长度.
         # _prepare_main_bian_titles_line(rows)
