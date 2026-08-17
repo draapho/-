@@ -51,7 +51,7 @@ python -m najia.gui
 ----------
 ```powershell
 python --version
-# >Python 3.9 且 <4.0
+# >Python 3.8 且 <4.0
 pip install arrow
 pip install lunar_python
 ```

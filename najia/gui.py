@@ -23,6 +23,7 @@ YAO_OPTIONS = [
 ]
 
 BAGUA_MAPPING = {
+    "": [],
     "1 乾天(☰)": ["1 少阳(静)", "1 少阳(静)", "1 少阳(静)"],
     "2 兑泽(☱)": ["2 少阴(静)", "1 少阳(静)", "1 少阳(静)"],
     "3 离火(☲)": ["1 少阳(静)", "2 少阴(静)", "1 少阳(静)"],
@@ -171,11 +172,11 @@ class NajiaApp(tk.Tk):
             cb.grid(row=r_idx, column=1, sticky=tk.EW, pady=5)
             self.yao_boxes[yao_idx] = cb
         # 设置默认值为 "1 乾天(☰)" 并自动同步至各爻
-        default_bagua = "1 乾天(☰)"
-        self.upper_bagua_cb.set(default_bagua)
-        self._on_upper_bagua_selected()
-        self.lower_bagua_cb.set(default_bagua)
-        self._on_lower_bagua_selected()
+        # default_bagua = "1 乾天(☰)"
+        # self.upper_bagua_cb.set(default_bagua)
+        # self._on_upper_bagua_selected()
+        # self.lower_bagua_cb.set(default_bagua)
+        # self._on_lower_bagua_selected()
 
         self._sync_mode_widgets()
 
@@ -329,9 +330,10 @@ class NajiaApp(tk.Tk):
         bagua = self.upper_bagua_cb.get()
         if bagua in BAGUA_MAPPING:
             yaos = BAGUA_MAPPING[bagua]
-            self.yao_boxes[5].set(yaos[0])
-            self.yao_boxes[4].set(yaos[1])
-            self.yao_boxes[3].set(yaos[2])
+            if yaos:
+                self.yao_boxes[5].set(yaos[0])
+                self.yao_boxes[4].set(yaos[1])
+                self.yao_boxes[3].set(yaos[2])
 
     def _on_lower_bagua_selected(self, event=None) -> None:
         bagua = self.lower_bagua_cb.get()

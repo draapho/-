@@ -695,6 +695,7 @@ class Najia(object):
                     rows["bian"]["yaom"][i] = rows["bian"]["yaom"][i].replace('㊂', '㊀㊁')
                 rows["bian"]["yaod"][i] = "".join(item.strip()[-1] for item in rows["bian"]["yaod"][i] if item and item.strip())
                 rows["bian"]["dong"][i] = "".join(item.strip()[-1] for item in rows["bian"]["dong"][i] if item and item.strip())
+                rows["bian"]["dong"][i] = "".join(item.strip()[-1] for item in rows["bian"]["dong"][i] if item and item.strip()) if rows["dyao"][i] in ("ｏ", "ｘ") else ""
 
         rows["desche3"] = "　".join([i for i in rows["desche3"] if i and i.strip()])        # 三合提示.
         rows["descxing3"] = "　".join([i for i in rows["descxing3"] if i and i.strip()])    # 三刑提示.

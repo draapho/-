@@ -134,5 +134,5 @@ def import_json_to_pkl(
     return p_pkl
 
 if __name__ == "__main__":
-    # export_pkl_to_json("../data/guaci.pkl")
-    import_json_to_pkl("../data/guaci.json")
+    # export_pkl_to_json("../data/guaci.pkl", "./guaci.json")
+    # import_json_to_pkl("./guaci.json", "../data/guaci.pkl")

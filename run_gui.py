@@ -11,7 +11,6 @@ if PROJECT_ROOT in sys.path:
     sys.path.remove(PROJECT_ROOT)
 sys.path.insert(0, PROJECT_ROOT)
 
-import najia.najia
 import najia.gui
 
 if __name__ == "__main__":
