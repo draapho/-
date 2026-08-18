@@ -300,13 +300,12 @@ def _extract_zhi(s: str) -> str:
         return s[1]
     return ""
 
-def get_xing5_relationship(a: str, b: str, format="b") -> str:
+def get_xing5_relationship(a: str, b: str, format="b", isDong = False) -> str:
     """
     五行关系判断 (纯中文接口)
     Args:
         a: 主体五行, 限 "木火土金水"
         b: 客体五行, 限 "木火土金水"
-        d: 动化关系, 需要地支和五行
     Returns:
         中文关系字符串: "比"/"生"/"克"/"耗"/"泄"
         中文关系字符串: "旺"/"相"/"死"/"囚"/"休"
@@ -315,9 +314,8 @@ def get_xing5_relationship(a: str, b: str, format="b") -> str:
     """
     _XING5_STANDARD = ("木", "火", "土", "金", "水")
     _INDEX_MAP = {name: idx for idx, name in enumerate(_XING5_STANDARD)}
-    _RELATION_MAP_A_SHENKE = {0: "比", 1: "生", 2: "克", 3: "耗", 4: "泄"}      # 对应于{A同B, A生B, A克B, A耗B(B克A), A泄B(B生A)}
+    _RELATION_MAP_A_SHENKE = {0: "扶", 1: "生", 2: "克", 3: "耗", 4: "泄"}      # 对应于{A同B, A生B, A克B, A耗B(B克A), A泄B(B生A)}
     _RELATION_MAP_B_WANGSHUAI = {0: "旺", 1: "相", 2: "死", 3: "囚", 4: "休"}   # 对应于{A同B, A生B, A克B, A耗B(B克A), A泄B(B生A)}
-    _RELATION_MAP_D_DONGHUA = {0: "比和", 1: "生泄", 2: "克耗", 3: "回克", 4: "回生"}
 
     xing1 = _extract_xing5(a);
     xing2 = _extract_xing5(b);
@@ -326,13 +324,13 @@ def get_xing5_relationship(a: str, b: str, format="b") -> str:
 
     diff = (_INDEX_MAP[xing2] - _INDEX_MAP[xing1]) % 5
 
-    if 'a' == format.lower():
-        return _RELATION_MAP_A_SHENKE[diff]
-    elif 'b' == format.lower():
-        return _RELATION_MAP_B_WANGSHUAI[diff]
-    elif 'd' == format.lower():
-        if diff != 0:
-            return _RELATION_MAP_D_DONGHUA[diff]
+    
+    if diff != 0 or not isDong:
+        if 'a' == format.lower():
+            return _RELATION_MAP_A_SHENKE[diff]
+        elif 'b' == format.lower():
+            return _RELATION_MAP_B_WANGSHUAI[diff]
+    else:   # 变爻对动爻的影响, 没有旺/比, 需要进一步分析地支情况.
         _JIN_MAP = { # 化进表
             "寅": "卯", "巳": "午", "申": "酉", "亥": "子",
             "丑": "辰", "辰": "未", "未": "戌", "戌": "丑"
@@ -344,11 +342,11 @@ def get_xing5_relationship(a: str, b: str, format="b") -> str:
         zhi1 = _extract_zhi(a);
         zhi2 = _extract_zhi(b);
         if zhi1 == zhi2:
-            return "吟伏"    # 应为吟伏, 为了末字取"伏"字.
-        elif _JIN_MAP.get(zhi1) == zhi2:
-            return "化进"
+            return "伏"     # 应为伏吟.
         elif _TUI_MAP.get(zhi1) == zhi2:
-            return "化退"
+            return "进"     # 为变爻->动爻, 因而化退为进.
+        elif _JIN_MAP.get(zhi1) == zhi2:
+            return "退"
     return ""
 
 def get_chonghe_relation(d1: str, d2: str) -> str:

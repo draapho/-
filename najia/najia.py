@@ -487,7 +487,7 @@ class Najia(object):
         if bian:
             bian["yaom"] = [[get_xing5_relationship(gz5_m, bian["qinx"][i])] for i in range(6)]
             bian["yaod"] = [[get_xing5_relationship(gz5_d, bian["qinx"][i])] for i in range(6)]
-            bian["dong"] = [[get_xing5_relationship(qinx[i], bian["qinx"][i], format= 'd')] for i in range(6)]  # 动爻 -> 变爻. 比和会进一步判断地支进, 退, 伏
+            bian["dong"] = [[get_xing5_relationship(bian["qinx"][i], qinx[i], format = 'b', isDong = True)] for i in range(6)]  # 变爻 -> 动爻. 可选相旺休囚死, 或生扶泄耗克, 会进一步判断地支进, 退, 伏
 
         # 冲合分析
         for i in range(6):
